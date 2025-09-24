@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +39,77 @@ FILES = {
     "log": LOG,
 }
 
+# default files
+default_azure = {
+    "tenant_id": "",
+    "client_id": "",
+    "store_id": "",
+    "scope_id": "",
+    "secret_name": "",
+    "certificate_subject": "",
+    "vault_name": "",
+    "sas_ttl": 90,
+}
+
+default_general = {
+    "loggingLevel": "info",
+}
+
+default_ip = {
+    "danfoss": [
+        {
+            "ip": "1.1.1.1",
+            "name": "panel_01",
+        },
+        {
+            "ip": "2.2.2.2",
+            "name": "panel_02",
+        },
+    ],
+    "emerson_e2": [
+        {
+            "ip": "1.1.1.1",
+            "name": "panel_01",
+        },
+        {
+            "ip": "2.2.2.2",
+            "name": "panel_02",
+        },
+    ],
+    "emerson_e3": [
+        {
+            "ip": "1.1.1.1",
+            "name": "panel_01",
+        },
+        {
+            "ip": "2.2.2.2",
+            "name": "panel_02",
+        },
+    ],
+}
+
 
 def setup_files():
     logger.debug("Checking files...")
 
+    def dump_default(default, path) -> None:
+        with open(path, "w+") as f:
+            json.dump(default, f, indent=2)
+
     for file, path in FILES.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         if (not path.exists()) and (file != "certificate"):
+
             path.touch()
+
+            match file:
+                case "ip_settings":
+                    dump_default(default_ip, path)
+                case "azure_settings":
+                    dump_default(default_azure, path)
+                case _:
+                    pass
+
             logger.info(f"Created file at {str(path)}")
 
     logger.debug("All files verified")
