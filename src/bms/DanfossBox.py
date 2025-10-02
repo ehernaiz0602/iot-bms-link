@@ -8,6 +8,8 @@ from pprint import pprint
 from tenacity import retry, stop_after_attempt
 from datetime import datetime, timezone
 import time
+from functools import reduce
+from collections.abc import Mapping, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +25,10 @@ def logtimer(func):
 
 
 class DanfossBox:
-    def __init__(self, ip: str) -> None:
+    def __init__(self, ip: str, name: str) -> None:
         self.xml_interface = DanfossXMLInterface(ip)
+        self.ip = ip
+        self.name = name
         self.nodetypes: dict[str, Nodetype] = {}
         self.hvacs: dict = {}  # Address table of ahindex: Point
         self.lighting: dict = {}  # Address table of index: Point
@@ -61,7 +65,6 @@ class DanfossBox:
         except Exception as e:
             logger.warning(f"Could not add nodetype: {e}")
 
-    @retry(stop=stop_after_attempt(3))
     async def discover_devices(self):
         logger.info("Starting device discovery")
         devices = await self.xml_interface.read_devices()
@@ -73,7 +76,6 @@ class DanfossBox:
             await self.add_nodetype(dev)
         logger.info("Finished device discovery")
 
-    @retry(stop=stop_after_attempt(3))
     async def discover_relays(self):
         logger.info("Starting relays discovery")
         relays = await self.xml_interface.read_relays()
@@ -86,7 +88,6 @@ class DanfossBox:
             await self.add_nodetype({f"@{k}": v for k, v in rel.items()})
         logger.info("Finished relays discovery")
 
-    @retry(stop=stop_after_attempt(3))
     async def discover_var_outs(self):
         logger.info("Starting var_outs discovery")
         var_outs = await self.xml_interface.read_var_outs()
@@ -99,12 +100,10 @@ class DanfossBox:
             await self.add_nodetype({f"@{k}": v for k, v in var.items()})
         logger.info("Finished var_outs discovery")
 
-    @retry(stop=stop_after_attempt(3))
     async def discover_additional_metadata(self):
         self.read_date_time = await self.xml_interface.read_date_time()
         self.schedule_summary = await self.xml_interface.schedule_summary()
 
-    @retry(stop=stop_after_attempt(3))
     async def discover_hvacs(self):
         logger.info("Starting HVACs discovery")
         hvacs = await self.xml_interface.read_hvacs()
@@ -132,7 +131,6 @@ class DanfossBox:
 
         logger.info("Finished HVACs discovery")
 
-    @retry(stop=stop_after_attempt(3))
     async def discover_lighting(self):
         logger.info("Starting lighting discovery")
         lightings = await self.xml_interface.read_lighting()
@@ -153,7 +151,6 @@ class DanfossBox:
             )
         logger.info("Finished lighting discovery")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_monitors(self):
         logger.info("Updating nodetype monitor points")
 
@@ -191,7 +188,6 @@ class DanfossBox:
             await self.add_nodetype(sx)
         logger.info("Finished updating monitoring points")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_nodetype_0(self):
         logger.info("Updating nodetype 0")
         nodetype = self.nodetypes.get("0")
@@ -223,7 +219,6 @@ class DanfossBox:
             await self.add_nodetype(s)
         logger.info("Finished updating nodetype 0")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_nodetype_1(self):
         logger.info("Updating nodetype 1")
         nodetype = self.nodetypes.get("1")
@@ -255,7 +250,6 @@ class DanfossBox:
             await self.add_nodetype(s)
         logger.info("Finished updating nodetype 1")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_nodetype_2(self):
         logger.info("Updating nodetype 2")
         nodetype2 = self.nodetypes.get("2")
@@ -287,7 +281,6 @@ class DanfossBox:
             await self.add_nodetype(s)
         logger.info("Finished updating nodetype 2")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_nodetype_3(self):
         logger.info("Updating nodetype 3")
         nodetype3 = self.nodetypes.get("3")
@@ -319,7 +312,6 @@ class DanfossBox:
             await self.add_nodetype(s)
         logger.info("Finished updating nodetype 3")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_nodetype_6(self):
         logger.info("Updating nodetype 6")
         resp = await self.xml_interface.read_meters()
@@ -340,7 +332,6 @@ class DanfossBox:
             await self.add_nodetype(m)
         logger.info("Finished updating nodetype 6")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_lighting_zone(self):
         logger.info("Updating lighting zones")
         if len(self.lighting) == 0:
@@ -353,7 +344,6 @@ class DanfossBox:
                 pt.meta[k] = v
         logger.info("Finished updating lighting zones")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_alarms(self):
         logger.info("Updating alarms")
         alarm_references = await self.xml_interface.alarm_summary()
@@ -419,7 +409,6 @@ class DanfossBox:
             logger.warning(f"Unexpected error when clearing old alarm data: {e}")
         logger.info("Finished updating alarms")
 
-    @retry(stop=stop_after_attempt(3))
     async def update_cs_devices(self):
         devs = []
         device_num = 1
@@ -522,6 +511,18 @@ class DanfossBox:
                 for m_id, m in n.mods.items():
                     for p_id, p in m.points.items():
                         yield p
+
+    def get_denormalized_data(self):
+        data = []
+        for each in self.yield_points():
+            try:
+                data.append(denormalize_data(each.meta, self.ip))
+            except Exception as e:
+                logger.warning(f"Could not normalize some data: {e}")
+        return data
+
+    def __repr__(self):
+        return f"DanfossBox(ip={self.ip}, name={self.name})"
 
 
 class Point(aobject):
@@ -661,3 +662,293 @@ class Nodetype:
         if node_id not in self.nodes:
             self.nodes[node_id] = await Node(node_id, self)
         await self.nodes[node_id].add_mod(data)
+
+
+# Normalization
+def normalize_data(data):
+    # pre-process
+    for each in [
+        "aux_heats",
+        "cooling_stages",
+        "heat_reclaims",
+        "inputs",
+        "relays",
+        "sensors",
+    ]:
+        one_down = each[:-1]
+        if isinstance(data.get(each, {}).get(one_down, None), dict):
+            data[each][one_down] = [data[each][one_down]]
+
+        if isinstance(
+            data.get(each, {}).get("nightsetback", {}).get("schedule", None), list
+        ):
+            data[each]["nightsetback"]["schedule"] = data[each]["nightsetback"][
+                "schedule"
+            ][0]
+
+    if isinstance(
+        data.get("dehumid_type", {}).get("stages", {}).get("stage", None), dict
+    ):
+        data["dehumid_type"]["stages"]["stage"] = [
+            data["dehumid_type"]["stages"]["stage"]
+        ]
+
+    def deep_get(keys, default=None):
+        try:
+            return reduce(lambda d, k: d.get(k, {}), keys, data) or default
+        except AttributeError:
+            return default
+
+    ret = {
+        "nodetype": data.get("@nodetype"),
+        "node": data.get("@node"),
+        "mod": data.get("@mod"),
+        "point": data.get("@point"),
+        "rack_id": data.get("@rack_id"),
+        "suction_id": data.get("@suction_id"),
+        "name": data.get("@name"),
+        "alternate_name": data.get("name"),
+        "alternate_value": data.get("@value"),
+        "type": data.get("type"),
+        "value": data.get("#text"),
+        "setpoint": data.get("@ctrl_val"),
+        "offset": data.get("@offset"),
+        "status": data.get("@status"),
+        "modelname": data.get("@modelname"),
+        "alternate_setpoint": data.get("@setpoint"),
+        "device_id": data.get("device_id"),
+        "ordernum": data.get("@ordernum"),
+        "num_suction": data.get("num_suction"),
+        "alternate_status": data.get("status"),
+        "hvac_type": data.get("hvac_type"),
+        "meter": {
+            "kw": data.get("kw"),
+            "kwh": {
+                "value": data.get("kwh"),
+                "reset_epoch": data.get("kwh_reset_epoch"),
+            },
+            "peak": {
+                "reset_epoch": data.get("pk_reset_epoch"),
+                "epoch": data.get("pk_epoch"),
+                "kw": data.get("pk"),
+            },
+        },
+        "condenser": {
+            "alarm_high": {
+                "limit": f'{deep_get(["read_condenser", "almhi_limit", "#text"])} {deep_get(["read_condenser", "almhi_limit", "@units"])}',
+                "duration": f'{deep_get(["read_condenser", "almhi_dur", "#text"])} {deep_get(["read_condenser", "almhi_dur", "@units"])}',
+            },
+            "delta": f'{deep_get(["read_condenser", "cond_delta", "#text"])} {deep_get(["read_condenser", "cond_delta", "@units"])}',
+            "type": deep_get(["read_condenser", "cond_type", "#text"]),
+            "control_sensor": deep_get(["read_condenser", "control_type", "#text"]),
+            "control_type": deep_get(["read_condenser", "control_type", "#text"]),
+            "fans": {
+                "number": deep_get(["read_condenser", "fans", "@num_fans"]),
+                "type": deep_get(["read_condenser", "fans", "@type"]),
+            },
+            "condensing": {
+                "max": f'{deep_get(["read_condenser", "max_cond", "#text"])} {deep_get(["read_condenser", "max_cond", "@units"])}',
+                "min": f'{deep_get(["read_condenser", "min_cond", "#text"])} {deep_get(["read_condenser", "min_cond", "@units"])}',
+            },
+            "name": deep_get(["read_condenser", "name"]),
+            "value": f'{deep_get(["read_condenser", "value", "#text"])} {deep_get(["read_condenser", "value", "@units"])}',
+        },
+        "suction_group": {
+            "alarm_high": {
+                "limit": f'{deep_get(["read_suction_group", "almhi_limit", "#text"])} {deep_get(["read_suction_group", "almhi_limit", "@units"])}',
+                "duration": f'{deep_get(["read_suction_group", "almhi_dur", "#text"])} {deep_get(["read_suction_group", "almhi_dur", "@units"])}',
+            },
+            "alarm_low": {
+                "limit": f'{deep_get(["read_suction_group", "almlo_limit", "#text"])} {deep_get(["read_suction_group", "almlo_limit", "@units"])}',
+                "duration": f'{deep_get(["read_suction_group", "almlo_dur", "#text"])} {deep_get(["read_suction_group", "almlo_dur", "@units"])}',
+            },
+            "auto_schedule": deep_get(["read_suction_group", "auto_schedule"]),
+            "num_circuits": deep_get(["read_suction_group", "num_circuits"]),
+            "suction_control": deep_get(
+                ["read_suction_group", "suction_control", "@type"]
+            ),
+            "suction_cutout": f'{deep_get(["read_suction_group", "suction_cutout", "#text"])} {deep_get(["read_suction_group", "suction_cutout", "@units"])}',
+            "suction_target": f'{deep_get(["read_suction_group", "suction_target", "#text"])} {deep_get(["read_suction_group", "suction_target", "@units"])}',
+            "value": f'{deep_get(["read_suction_group", "value", "#text"])} {deep_get(["read_suction_group", "value", "@units"])}',
+            "name": deep_get(["read_suction_group", "name"]),
+        },
+        "aux_heats": {
+            "stages": [
+                {k.replace("@", ""): v for k, v in each.items()}
+                for each in deep_get(["aux_heats", "aux_heat"], [{"None": None}])
+            ],
+            "nightsetback": {
+                k.replace("@", ""): v
+                for k, v in deep_get(
+                    ["aux_heats", "nightsetback", "schedule"], {"None": None}
+                ).items()
+            },
+        },
+        "cooling_stages": {
+            "stages": [
+                {k.replace("@", ""): v for k, v in each.items()}
+                for each in deep_get(
+                    ["cooling_stages", "cooling_stage"], [{"None": None}]
+                )
+            ],
+            "nightsetback": {
+                k.replace("@", ""): v
+                for k, v in deep_get(
+                    ["cooling_stages", "nightsetback", "schedule"], {"None": None}
+                ).items()
+            },
+        },
+        "heat_reclaims": {
+            "stages": [
+                {k.replace("@", ""): v for k, v in each.items()}
+                for each in deep_get(
+                    ["heat_reclaims", "heat_reclaim"], [{"None": None}]
+                )
+            ],
+            "nightsetback": {
+                k.replace("@", ""): v
+                for k, v in deep_get(
+                    ["heat_reclaims", "nightsetback", "schedule"], {"None": None}
+                ).items()
+            },
+        },
+        "inputs": [
+            {k.replace("@", ""): v for k, v in each.items()}
+            for each in deep_get(["inputs", "input"], [{"None": None}])
+        ],
+        "relays": [
+            {k.replace("@", ""): v for k, v in each.items()}
+            for each in deep_get(["relays", "relay"], [{"None": None}])
+        ],
+        "sensors": [
+            {k.replace("@", ""): v for k, v in each.items()}
+            for each in deep_get(["sensors", "sensor"], [{"None": None}])
+        ],
+        "alarms": [
+            {
+                "ref": deep_get(["alarm_detail", alarm_id, "ref"]),
+                "ref_tag_id": deep_get(["alarm_detail", alarm_id, "ref_tag_id"]),
+                "status": deep_get(["alarm_detail", alarm_id, "status"]),
+                "clearable": deep_get(["alarm_detail", alarm_id, "clearable"]),
+                "action": deep_get(["alarm_detail", alarm_id, "action"]),
+                "name": deep_get(["alarm_detail", alarm_id, "name"]),
+                "setting": deep_get(["alarm_detail", alarm_id, "setting"]),
+                "acknowledge": {
+                    "account_number": str(
+                        int(deep_get(["alarm_detail", alarm_id, "ack"], 0)) % 256
+                    ),
+                    "authorization_number": str(
+                        int(deep_get(["alarm_detail", alarm_id, "ack"], 0)) // 256
+                    ),
+                    "acknowledgement": deep_get(
+                        ["alarm_detail", alarm_id, "acknowledgement"]
+                    ),
+                    "user_account": deep_get(["alarm_detail", alarm_id, "ackUserAcct"]),
+                },
+                "epoch": {
+                    "inactive": deep_get(["alarm_detail", alarm_id, "epoch_inactive"]),
+                    "cleared": deep_get(["alarm_detail", alarm_id, "epoch_cleared"]),
+                    "active": deep_get(["alarm_detail", alarm_id, "epoch"]),
+                },
+                "state": {
+                    "active": deep_get(["alarm_detail", alarm_id, "active_state"]),
+                    "acked": deep_get(["alarm_detail", alarm_id, "acked_state"]),
+                    "cleared": deep_get(["alarm_detail", alarm_id, "cleared_state"]),
+                },
+            }
+            for alarm_id in data.get("alarm_detail", {})
+        ],
+        "circuit": [
+            {
+                "id": circuit.get("@circuit_id"),
+                "defrost": {
+                    "type": circuit.get("defrosts", {}).get("@type"),
+                    "duration": circuit.get("defrosts", {}).get("defrost_dur"),
+                    "drip_delay": circuit.get("defrosts", {}).get("drip_delay"),
+                    "min_defrost_time": circuit.get("defrosts", {})
+                    .get("min_defrost", {})
+                    .get("#text"),
+                    "term": circuit.get("defrosts", {}).get("term", {}).get("@type"),
+                },
+                "name": circuit.get("name", {}).get("#text"),
+                "name_index": circuit.get("name", {}).get("@name_index"),
+                "status": circuit.get("status", {}).get("#text"),
+                "temperature": {
+                    "range": f'{circuit.get("temp_range", {}).get("#text")} {circuit.get("temp_range", {}).get("@units")}',
+                    "target": f'{circuit.get("temp_target", {}).get("#text")} {circuit.get("temp_target", {}).get("@units")}',
+                    "control": circuit.get("temp_control", {}).get("#text"),
+                },
+            }
+            for circuit in data.get("read_circuit", [])
+        ],
+        "leak_devices": data.get("leak_devices", []),
+    }
+
+    # post-process
+    ret = {k: v for k, v in ret.items() if v is not None}
+
+    if ret.get("condenser").get("type") is None:
+        del ret["condenser"]
+
+    if ret.get("suction_group").get("name") is None:
+        del ret["suction_group"]
+
+    if ret.get("meter").get("kw") is None:
+        del ret["meter"]
+
+    # if ret.get("alarms") == []:
+    #     del ret["alarms"]
+
+    for each in ["aux_heats", "cooling_stages", "heat_reclaims"]:
+        if ret.get(each).get("stages") == [{"None": None}]:
+            del ret[each]
+    for each in ["sensors", "relays", "inputs"]:
+        if ret.get(each) == [{"None": None}]:
+            del ret[each]
+
+    final = {}
+    for k, v in ret.items():
+        if "alternate_" in k and k.replace("alternate_", "") not in ret.keys():
+            final[k.replace("alternate_", "")] = v
+        else:
+            final[k] = v
+    return final
+
+
+def ret_to_array_schema(ret: dict) -> dict:
+    id_fields = ["nodetype", "node", "mod", "point"]
+    id_block = {k: ret.get(k) for k in id_fields if k in ret}
+
+    keys = []
+    values = []
+
+    def walk(obj, prefix=""):
+        if isinstance(obj, Mapping):
+            for k, v in obj.items():
+                new_prefix = f"{prefix}__{k}" if prefix else k
+                walk(v, new_prefix)
+        elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
+            for idx, v in enumerate(obj):
+                new_prefix = f"{prefix}[{idx}]"
+                walk(v, new_prefix)
+        else:
+            keys.append(prefix)
+            values.append(obj)
+
+    walk(
+        {k: v for k, v in ret.items() if k not in ("nodetype", "node", "mod", "point")}
+    )
+
+    return {
+        "id": id_block,
+        "denorm_keys": keys,
+        "denorm_values": values,
+    }
+
+
+def denormalize_data(data, ip: str):
+    ret = normalize_data(data)
+    fin = ret_to_array_schema(ret)
+    fin["id"]["ip"] = ip
+    fin["timestamp"] = datetime.now(timezone.utc).isoformat()
+    return fin

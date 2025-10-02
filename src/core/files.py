@@ -15,6 +15,7 @@ LOG_DIRECTORY = PARENT_DIRECTORY / "logs"
 # config files
 AZURE_SETTINGS = CONFIG_DIRECTORY / "Settings-Azure.json"
 IP_SETTINGS = CONFIG_DIRECTORY / "Settings-IP.json"
+GENERAL_SETTINGS = CONFIG_DIRECTORY / "Settings-General.json"
 
 # data files
 DATABASE = DATA_DIRECTORY / "database.db"
@@ -34,6 +35,7 @@ DIRECTORIES = {
 FILES = {
     "azure_settings": AZURE_SETTINGS,
     "ip_settings": IP_SETTINGS,
+    "general_settings": GENERAL_SETTINGS,
     "database": DATABASE,
     "certificate": CERTIFICATE,
     "log": LOG,
@@ -53,9 +55,13 @@ default_azure = {
 
 default_general = {
     "loggingLevel": "info",
+    "httpRequestDelay": 3,
+    "httpTimeoutDelay": 3,
+    "httpRetryCount": 3,
 }
 
 default_ip = {
+    "store_id": "0000",
     "danfoss": [
         {
             "ip": "1.1.1.1",
@@ -107,6 +113,8 @@ def setup_files():
                     dump_default(default_ip, path)
                 case "azure_settings":
                     dump_default(default_azure, path)
+                case "general_settings":
+                    dump_default(default_general, path)
                 case _:
                     pass
 

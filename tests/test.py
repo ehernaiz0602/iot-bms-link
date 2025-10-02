@@ -14,6 +14,31 @@ from azure.iot.device import IoTHubDeviceClient, Message
 # with open("box.pkl", "rb") as f:
 #     example = pickle.load(f)
 
+example = {
+    "@mod": "-1",
+    "@node": "-1",
+    "@nodetype": "255",
+    "@point": "-1",
+    "leak_devices": [
+        {"name": "A12 Deli Frz", "status": "0ppm"},
+        {"name": "B19 Meat Clr", "status": "0ppm"},
+        {"name": "B20 Meat prp", "status": "0ppm"},
+        {"name": "B21 Seafood Clr", "status": "0ppm"},
+        {"name": "B22 Serv Deli", "status": "0ppm"},
+        {"name": "C1 Groc F", "status": "0ppm"},
+        {"name": "C3 Bakery Frz", "status": "4ppm"},
+        {"name": "C4 Bakery Clr", "status": "5ppm"},
+        {"name": "C5 Dairy Clr", "status": "0ppm"},
+        {"name": "C6 fruit Cut", "status": "0ppm"},
+        {"name": "C7 Floral Clr", "status": "0ppm"},
+        {"name": "C9 Prod Clr", "status": "2ppm"},
+        {"name": "Protocol A B", "status": "3ppm"},
+        {"name": "Protocol C D", "status": "4ppm"},
+        {"name": "Leak Detecti:Zone 15", "status": "0ppm"},
+        {"name": "Leak Detecti:Zone 16", "status": "0ppm"},
+    ],
+}
+
 
 def normalize_data(data):
     # pre-process
@@ -231,6 +256,7 @@ def normalize_data(data):
             }
             for circuit in data.get("read_circuit", [])
         ],
+        "leak_devices": data.get("leak_devices", []),
     }
 
     # post-process
@@ -274,7 +300,7 @@ def ret_to_array_schema(ret: dict) -> dict:
     def walk(obj, prefix=""):
         if isinstance(obj, Mapping):
             for k, v in obj.items():
-                new_prefix = f"{prefix}.{k}" if prefix else k
+                new_prefix = f"{prefix}__{k}" if prefix else k
                 walk(v, new_prefix)
         elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
             for idx, v in enumerate(obj):
@@ -293,11 +319,21 @@ def ret_to_array_schema(ret: dict) -> dict:
     }
 
 
-# ret = normalize_data(example[-1])
-# fin = ret_to_array_schema(ret)
-# fin["id"]["ip"] = "dummy_ip"
-# fin["timestamp"] = datetime.now(timezone.utc).isoformat()
-# pprint(fin)
+def denormalize_data(data, ip: str):
+    ret = normalize_data(data)
+    fin = ret_to_array_schema(ret)
+    fin["id"]["ip"] = ip
+    fin["timestamp"] = datetime.now(timezone.utc).isoformat()
+    return fin
+
+
+x = denormalize_data(example, "1.2.3.4")
+x_id = pd.DataFrame([x.get("id")])
+x_time = pd.DataFrame([x.get("timestamp")])
+z = {"dv": x.get("denorm_values"), "dk": x.get("denorm_keys")}
+zz = pd.DataFrame(z)
+zz = zz.join(x_id, how="cross").join(x_time, how="cross")
+pprint(zz)
 
 # for x in range(len(data)):
 #     pprint(data[x])

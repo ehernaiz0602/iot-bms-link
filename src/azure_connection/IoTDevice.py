@@ -77,6 +77,12 @@ class IoTDevice:
 
     async def connect(self):
         try:
+            if self.hostname == "":
+                try:
+                    await self.provision_device()
+                except:
+                    raise Exception()
+
             self.device_client = IoTHubDeviceClient.create_from_symmetric_key(
                 symmetric_key=self.device_key,
                 hostname=self.hostname,
@@ -92,6 +98,21 @@ class IoTDevice:
             self.connected = False
             logger.debug(f"Not able to connect to IoTHub. Error: {e}")
 
+    async def send_message(self, data):
+        if not self.connected:
+            await self.connect()
+
+        if self.connected:
+            try:
+                logger.info("Sending message to IoTHub")
+                message = Message(str(data))
+                await self.device_client.send_message(message)
+            except Exception as e:
+                logger.error(f"Could not send message to IoTHub: {e}")
+
+        else:
+            logger.warning(f"Could not send message to IoTHub: Failure to connect.")
+
     def disconnect(self):
         logging.info(f"Disconnecting from IoTHub")
         if self.connected:
@@ -99,3 +120,6 @@ class IoTDevice:
             logging.info(f"Disconnected from IoTHub")
         else:
             logging.debug(f"Device was not connected to IoTHub")
+
+    def __repr__(self):
+        return f"IoTDevice(device_id={self.device_id}, connected={self.connected})"

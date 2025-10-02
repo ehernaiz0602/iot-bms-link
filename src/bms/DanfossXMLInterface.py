@@ -1,10 +1,12 @@
 import xml.etree.ElementTree as ET
 import xmltodict as xtd
+import core
+import json
 from typing import Any
 from tenacity import (
     retry,
     stop_after_attempt,
-    wait_exponential,
+    wait_fixed,
     retry_if_exception_type,
 )
 import asyncio
@@ -15,10 +17,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+with open(core.GENERAL_SETTINGS, "r") as f:
+    general_settings = json.load(f)
+
 
 def process_command(func):
     async def wrapper(self, *args, **kwargs):
-        SLEEP = 3
+        sleep = general_settings.get("httpRequestDelay", 3)
         element: ET.Element = func(self, *args, **kwargs)
         action: str = element.attrib.get("action", "unknown")
         element_string: str = ET.tostring(element, encoding="unicode")
@@ -34,7 +39,7 @@ def process_command(func):
 
         @retry(
             stop=stop_after_attempt(self.retries),
-            wait=wait_exponential(multiplier=1, min=5, max=10),
+            wait=wait_fixed(sleep),
             retry=retry_if_exception_type(aiohttp.ClientError),
         )
         async def send_request(connector, timeout):
@@ -54,14 +59,14 @@ def process_command(func):
             logger.debug(f"Response received from {self.endpoint}")
         except Exception as e:
             logger.warning(f"Final failure after {self.retries} retries: {e}")
-            await asyncio.sleep(SLEEP)
+            await asyncio.sleep(sleep)
             return {
                 "@action": action,
                 "@error": "Connection Error",
             }
 
         try:
-            await asyncio.sleep(SLEEP)
+            await asyncio.sleep(sleep)
             return xtd.parse(response_text)["resp"]
         except Exception as e:
             logger.error(f"Parsing error: {e}")
@@ -82,8 +87,8 @@ class DanfossXMLInterface:
     ):
         self.ip = ip
         self.endpoint = f"http://{ip}/http/xml.cgi"
-        self.timeout = timeout
-        self.retries = retries
+        self.timeout = general_settings.get("httpTimeoutDelay", 3)
+        self.retries = general_settings.get("httpRetryCount", 3)
 
         self.http_headers = {
             "Connection": "close",
