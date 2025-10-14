@@ -11,7 +11,9 @@ import hashlib
 import hmac
 import logging
 import json
-import atexit
+from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
+import copy
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +49,6 @@ class IoTDevice:
             vault_url=keyvault_url, credential=self.credential
         )
         self.sas_ttl: int = azure_settings.get("sas_ttl", 0) * 24 * 60 * 60
-        atexit.register(self.disconnect)
 
     async def provision_device(self):
         try:
@@ -98,20 +99,66 @@ class IoTDevice:
             self.connected = False
             logger.debug(f"Not able to connect to IoTHub. Error: {e}")
 
-    async def send_message(self, data):
+    async def send_message(self, data: list[dict], ip: str):
         if not self.connected:
             await self.connect()
 
-        if self.connected:
-            try:
-                logger.info("Sending message to IoTHub")
-                message = Message(str(data))
-                await self.device_client.send_message(message)
-            except Exception as e:
-                logger.error(f"Could not send message to IoTHub: {e}")
+        if not self.connected:
+            logger.warning("Could not send message to IoTHub: Failure to connect.")
+            return
 
-        else:
-            logger.warning(f"Could not send message to IoTHub: Failure to connect.")
+        frames = [self.denormalize_dict(d, ip) for d in data]
+        frames = [f for f in frames if f is not None]
+
+        master_frame = {
+            "packets": [],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        for frame in frames:
+            base_packet = {
+                "id": frame["id"],
+                "keys": [],
+                "values": [],
+            }
+
+            for k, v in zip(frame["keys"], frame["values"]):
+                base_packet["keys"].append(k)
+                base_packet["values"].append(v)
+
+                packet_copy = copy.deepcopy(base_packet)
+                master_frame["packets"].append(packet_copy)
+
+                payload = json.dumps(master_frame)
+                message = Message(payload)
+                size = message.get_size()
+
+                if size >= (256 * 1024) - 512:
+                    # Remove last packet and send
+                    master_frame["packets"].pop()
+                    base_packet["keys"].pop()
+                    base_packet["values"].pop()
+
+                    payload = json.dumps(master_frame)
+                    message = Message(payload)
+                    await self.device_client.send_message(message)
+                    logger.info(
+                        f"Sent message to IoTHub with size {message.get_size()}"
+                    )
+
+                    # Reset master_frame and continue with current base_packet
+                    master_frame = {
+                        "packets": [],
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                    master_frame["packets"].append(copy.deepcopy(base_packet))
+
+        # Final send if master_frame has leftover packets
+        if master_frame["packets"]:
+            payload = json.dumps(master_frame)
+            message = Message(payload)
+            await self.device_client.send_message(message)
+            logger.info(f"Sent final message to IoTHub with size {message.get_size()}")
 
     def disconnect(self):
         logging.info(f"Disconnecting from IoTHub")
@@ -120,6 +167,47 @@ class IoTDevice:
             logging.info(f"Disconnected from IoTHub")
         else:
             logging.debug(f"Device was not connected to IoTHub")
+
+    def denormalize_dict(self, ret: dict, ip: str) -> dict | None:
+        id_fields = ["@nodetype", "@node", "@mod", "@point"]
+        id_block = {k: ret.get(k) for k in id_fields if k in ret}
+        id_block["ip"] = ip
+
+        keys = []
+        values = []
+
+        def walk(obj, prefix=""):
+            if isinstance(obj, Mapping):
+                for k, v in obj.items():
+                    new_prefix = f"{prefix}__{k}" if prefix else k
+                    walk(v, new_prefix)
+            elif isinstance(obj, Sequence) and not isinstance(
+                obj, (str, bytes, bytearray)
+            ):
+                for idx, v in enumerate(obj):
+                    new_prefix = f"{prefix}[{idx}]"
+                    walk(v, new_prefix)
+            else:
+                keys.append(prefix)
+                values.append(obj)
+
+        try:
+            walk(
+                {
+                    k: v
+                    for k, v in ret.items()
+                    if k not in ("nodetype", "node", "mod", "point")
+                }
+            )
+        except Exception as e:
+            logger.error(f"Could not denormalize data: {e}")
+            return None
+
+        return {
+            "id": id_block,
+            "keys": keys,
+            "values": values,
+        }
 
     def __repr__(self):
         return f"IoTDevice(device_id={self.device_id}, connected={self.connected})"

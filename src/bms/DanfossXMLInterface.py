@@ -40,7 +40,6 @@ def process_command(func):
         @retry(
             stop=stop_after_attempt(self.retries),
             wait=wait_fixed(sleep),
-            retry=retry_if_exception_type(aiohttp.ClientError),
         )
         async def send_request(connector, timeout):
 

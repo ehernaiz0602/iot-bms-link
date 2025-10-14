@@ -4,12 +4,7 @@ from core import aobject
 from rich.tree import Tree
 from rich import print as rprint
 import logging
-from pprint import pprint
-from tenacity import retry, stop_after_attempt
-from datetime import datetime, timezone
 import time
-from functools import reduce
-from collections.abc import Mapping, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +24,7 @@ class DanfossBox:
         self.xml_interface = DanfossXMLInterface(ip)
         self.ip = ip
         self.name = name
+        self.polling: bool = False
         self.nodetypes: dict[str, Nodetype] = {}
         self.hvacs: dict = {}  # Address table of ahindex: Point
         self.lighting: dict = {}  # Address table of index: Point
@@ -37,23 +33,26 @@ class DanfossBox:
         self.read_suction_group: dict = {}
         self.read_condenser: dict = {}
         self.read_circuit: dict = {}
+        self.read_units: dict = {}
+        self.read_date_time: dict = {}
+        self.schedule_summary: dict = {}
+        self.read_store_schedule: dict = {}
 
     @logtimer
     async def initialize(self):
-        logging.info("Starting initial discovery")
+        logging.info(f"{self.name} is starting initial discovery")
         for each in [
             "discover_devices",
             "discover_relays",
-            # "discover_additional_metadata",
+            "discover_additional_metadata",
             "discover_var_outs",
             "discover_lighting",
             "discover_hvacs",
-            "discover_points_si",
         ]:
             try:
                 await getattr(self, each)()
             except:
-                pass
+                logger.warning(f"No function implemented for {each}")
         logging.info("Finished initial discovery")
 
     async def add_nodetype(self, data: dict):
@@ -66,7 +65,7 @@ class DanfossBox:
             logger.warning(f"Could not add nodetype: {e}")
 
     async def discover_devices(self):
-        logger.info("Starting device discovery")
+        logger.info(f"{self.name} is starting device discovery")
         devices = await self.xml_interface.read_devices()
         devices = devices.get("device", [])
         if isinstance(devices, dict):
@@ -74,10 +73,10 @@ class DanfossBox:
 
         for dev in devices:
             await self.add_nodetype(dev)
-        logger.info("Finished device discovery")
+        logger.info(f"{self.name} finished device discovery")
 
     async def discover_relays(self):
-        logger.info("Starting relays discovery")
+        logger.info(f"{self.name} is starting relays discovery")
         relays = await self.xml_interface.read_relays()
         relays = relays.get("relay", [])
         if isinstance(relays, dict):
@@ -86,10 +85,10 @@ class DanfossBox:
         for rel in relays:
             rel["nodetype"] = "1"
             await self.add_nodetype({f"@{k}": v for k, v in rel.items()})
-        logger.info("Finished relays discovery")
+        logger.info(f"{self.name} finished relays discovery")
 
     async def discover_var_outs(self):
-        logger.info("Starting var_outs discovery")
+        logger.info(f"{self.name} is starting var_outs discovery")
         var_outs = await self.xml_interface.read_var_outs()
         var_outs = var_outs.get("var_output", [])
         if isinstance(var_outs, dict):
@@ -98,45 +97,38 @@ class DanfossBox:
         for var in var_outs:
             var["nodetype"] = "3"
             await self.add_nodetype({f"@{k}": v for k, v in var.items()})
-        logger.info("Finished var_outs discovery")
+        logger.info(f"{self.name} Finished var_outs discovery")
 
     async def discover_additional_metadata(self):
-        self.read_date_time = await self.xml_interface.read_date_time()
         self.schedule_summary = await self.xml_interface.schedule_summary()
+        # self.read_date_time = await self.xml_interface.read_date_time()
+        self.read_units = await self.xml_interface.read_units()
+        self.read_store_schedule = self.xml_interface.read_store_schedule()
 
     async def discover_hvacs(self):
-        logger.info("Starting HVACs discovery")
+        logger.info(f"{self.name} Starting HVACs discovery")
         hvacs = await self.xml_interface.read_hvacs()
-        hvacs = hvacs.get("hvacs", "null")
-        hvacs = x if isinstance((x := hvacs.get("hvac")), list) else [x]
-        for hvac in hvacs:
-            await self.add_nodetype(hvac)
-            self.hvacs[hvac.get("@ahindex")] = self.get_point(
-                hvac.get("@nodetype"),
-                hvac.get("@node"),
-                hvac.get("@mod"),
-                hvac.get("@point"),
-            )
-
-        for unit in self.hvacs:
-            hu = await self.xml_interface.read_hvac_unit(int(unit))
-            await self.add_nodetype(hu)
-
-            hs = await self.xml_interface.read_hvac_service(int(unit))
-            hs["@nodetype"] = hu.get("@nodetype")
-            hs["@node"] = hu.get("@node")
-            hs["@mod"] = hu.get("@mod")
-            hs["@point"] = hu.get("@point")
-            await self.add_nodetype(hs)
-
-        logger.info("Finished HVACs discovery")
+        hvacs = hvacs.get("hvacs", {})
+        if hvacs != {}:
+            hvacs = x if isinstance((x := hvacs.get("hvac")), list) else [x]
+            for hvac in hvacs:
+                await self.add_nodetype(hvac)
+                self.hvacs[hvac.get("@ahindex")] = self.get_point(
+                    hvac.get("@nodetype"),
+                    hvac.get("@node"),
+                    hvac.get("@mod"),
+                    hvac.get("@point"),
+                )
+            logger.info(f"{self.name} Finished HVACs discovery")
+        else:
+            logger.warning(f"Could not discover HVACs")
 
     async def discover_lighting(self):
-        logger.info("Starting lighting discovery")
+        logger.info(f"{self.name} Starting lighting discovery")
         lightings = await self.xml_interface.read_lighting()
 
         if lightings.get("total") == "0":
-            logger.info("Finished lighting discovery")
+            logger.info(f"{self.name} Finished lighting discovery")
             return
 
         lightings = lightings.get("device", "null")
@@ -149,10 +141,10 @@ class DanfossBox:
                 lighting.get("@mod"),
                 lighting.get("@point"),
             )
-        logger.info("Finished lighting discovery")
+        logger.info(f"{self.name} Finished lighting discovery")
 
     async def update_monitors(self):
-        logger.info("Updating nodetype monitor points")
+        logger.info(f"{self.name} Updating nodetype monitor points")
 
         cmds = []
         points = self.yield_points()
@@ -186,10 +178,10 @@ class DanfossBox:
                 if k not in ["@nodetype", "@node", "@mod", "@point"]
             }
             await self.add_nodetype(sx)
-        logger.info("Finished updating monitoring points")
+        logger.info(f"{self.name} Finished updating monitoring points")
 
     async def update_nodetype_0(self):
-        logger.info("Updating nodetype 0")
+        logger.info(f"{self.name} Updating nodetype 0")
         nodetype = self.nodetypes.get("0")
         if not nodetype:
             return
@@ -217,10 +209,10 @@ class DanfossBox:
         for s in resp_s:
             s["@nodetype"] = "0"
             await self.add_nodetype(s)
-        logger.info("Finished updating nodetype 0")
+        logger.info(f"{self.name} Finished updating nodetype 0")
 
     async def update_nodetype_1(self):
-        logger.info("Updating nodetype 1")
+        logger.info(f"{self.name} Updating nodetype 1")
         nodetype = self.nodetypes.get("1")
         if not nodetype:
             return
@@ -248,10 +240,10 @@ class DanfossBox:
         for s in resp_s:
             s["@nodetype"] = "1"
             await self.add_nodetype(s)
-        logger.info("Finished updating nodetype 1")
+        logger.info(f"{self.name} Finished updating nodetype 1")
 
     async def update_nodetype_2(self):
-        logger.info("Updating nodetype 2")
+        logger.info(f"{self.name} Updating nodetype 2")
         nodetype2 = self.nodetypes.get("2")
         if not nodetype2:
             return
@@ -279,10 +271,10 @@ class DanfossBox:
         for s in resp_s:
             s["@nodetype"] = "2"
             await self.add_nodetype(s)
-        logger.info("Finished updating nodetype 2")
+        logger.info(f"{self.name} Finished updating nodetype 2")
 
     async def update_nodetype_3(self):
-        logger.info("Updating nodetype 3")
+        logger.info(f"{self.name} Updating nodetype 3")
         nodetype3 = self.nodetypes.get("3")
         if not nodetype3:
             return
@@ -310,10 +302,10 @@ class DanfossBox:
         for s in resp_s:
             s["@nodetype"] = "3"
             await self.add_nodetype(s)
-        logger.info("Finished updating nodetype 3")
+        logger.info(f"{self.name} Finished updating nodetype 3")
 
     async def update_nodetype_6(self):
-        logger.info("Updating nodetype 6")
+        logger.info(f"{self.name} Updating nodetype 6")
         resp = await self.xml_interface.read_meters()
 
         meters = resp.get("@read_meters")
@@ -330,22 +322,25 @@ class DanfossBox:
             m["@point"] = m.get("@point", "-1")
 
             await self.add_nodetype(m)
-        logger.info("Finished updating nodetype 6")
+        logger.info(f"{self.name} Finished updating nodetype 6")
 
     async def update_lighting_zone(self):
-        logger.info("Updating lighting zones")
+        logger.info(f"{self.name} Updating lighting zones")
         if len(self.lighting) == 0:
             return
 
         for idx, pt in self.lighting.items():
-            resp = await self.xml_interface.read_lighting_zone(int(idx))
+            try:
+                resp = await self.xml_interface.read_lighting_zone(int(idx))
 
-            for k, v in resp.items():
-                pt.meta[k] = v
-        logger.info("Finished updating lighting zones")
+                for k, v in resp.items():
+                    pt.meta[k] = v
+            except:
+                pass
+        logger.info(f"{self.name} Finished updating lighting zones")
 
     async def update_alarms(self):
-        logger.info("Updating alarms")
+        logger.info(f"{self.name} Updating alarms")
         alarm_references = await self.xml_interface.alarm_summary()
 
         acked_refs = alarm_references.get("acked", {}).get("ref", None)
@@ -407,7 +402,7 @@ class DanfossBox:
                         pass
         except Exception as e:
             logger.warning(f"Unexpected error when clearing old alarm data: {e}")
-        logger.info("Finished updating alarms")
+        logger.info(f"{self.name} Finished updating alarms")
 
     async def update_cs_devices(self):
         devs = []
@@ -448,9 +443,45 @@ class DanfossBox:
         }
         await self.add_nodetype(final)
 
+    async def update_hvacs(self):
+        for unit in self.hvacs:
+            hu = await self.xml_interface.read_hvac_unit(int(unit))
+            await self.add_nodetype(hu)
+
+            hs = await self.xml_interface.read_hvac_service(int(unit))
+            hs["@nodetype"] = hu.get("@nodetype")
+            hs["@node"] = hu.get("@node")
+            hs["@mod"] = hu.get("@mod")
+            hs["@point"] = hu.get("@point")
+            await self.add_nodetype(hs)
+
+    async def update_circuit_suction(self):
+        logger.info(f"{self.name} Updating suction groups and circuits")
+        self.read_circuit = {}
+        for key in self.read_suction_group.keys():
+            self.read_suction_group[key] = await self.xml_interface.read_suction_group(
+                key[0], key[1]
+            )
+
+            if (
+                nc := self.read_suction_group[key].get("num_circuits", None)
+            ) is not None:
+                try:
+                    for i in range(int(nc)):
+                        circ = await self.xml_interface.read_circuit(
+                            key[0], key[1], i + 1
+                        )
+                        if key not in self.read_circuit.keys():
+                            self.read_circuit[key] = []
+                        self.read_circuit[key].append(circ)
+                        logger.debug(f"Circuit {key[0]}_{key[1]}_{i+1} updated")
+                except:
+                    pass
+
     @logtimer
-    async def update_nodetypes(self):
-        logger.info("Starting update loop")
+    async def update_all(self):
+        self.polling_status = True
+        logger.info(f"{self.name} Starting update loop")
         await self.update_nodetype_0()
         await self.update_nodetype_1()
         await self.update_nodetype_2()
@@ -459,7 +490,21 @@ class DanfossBox:
         await self.update_lighting_zone()
         await self.update_alarms()
         await self.update_monitors()
-        logger.info("Finished update loop")
+        await self.update_cs_devices()
+        await self.update_hvacs()
+        await self.update_circuit_suction()
+        logger.info(f"{self.name} Finished update loop")
+        self.polling_status = False
+
+    async def poll_forever(self):
+        await self.initialize()
+        logger.info(f"{self.name} is about to begin its polling loop")
+        await asyncio.sleep(10)
+        while True:
+            logger.info(f"{self.name} has begun its polling loop")
+            await self.update_all()
+            logger.info(f"{self.name} is waiting one minute before next update loop")
+            await asyncio.sleep(60)
 
     def print_hierarchy(self):
         root = Tree(f"[bold]{self.xml_interface.ip}[/bold]")
@@ -512,13 +557,23 @@ class DanfossBox:
                     for p_id, p in m.points.items():
                         yield p
 
-    def get_denormalized_data(self):
+    def get_data(self):
         data = []
-        for each in self.yield_points():
-            try:
-                data.append(denormalize_data(each.meta, self.ip))
-            except Exception as e:
-                logger.warning(f"Could not normalize some data: {e}")
+        for point in self.yield_points():
+            data.append(point.meta)
+        shared_data = {
+            "@nodetype": "0",
+            "@node": "0",
+            "@mod": "0",
+            "@point": "0",
+            "read_suction_group": self.read_suction_group,
+            "read_condenser": self.read_condenser,
+            "read_circuit": self.read_circuit,
+            "read_units": self.read_units,
+            "schedule_summary": self.schedule_summary,
+            "read_store_schedule": self.read_store_schedule,
+        }
+        data.append(shared_data)
         return data
 
     def __repr__(self):
@@ -544,7 +599,6 @@ class Point(aobject):
     def __repr__(self):
         return f"<Point {self.point_id}>"
 
-    @retry(stop=stop_after_attempt(3))
     async def get_condenser_data(self):
         if x := self.meta.get("@rack_id"):
             logger.debug(f"Checking condenser mappings")
@@ -552,9 +606,10 @@ class Point(aobject):
                 self.parent_dbox.read_condenser[x] = (
                     await self.parent_dbox.xml_interface.read_condenser(x)
                 )
-            self.meta["read_condenser"] = self.parent_dbox.read_condenser[x]
+            # self.meta["read_condenser"] = self.parent_dbox.read_condenser[x]
+            # Change to reference
+            self.meta["read_condenser_ref"] = x
 
-    @retry(stop=stop_after_attempt(3))
     async def get_suction_group_data(self):
         if (y := self.meta.get("@suction_id")) and (x := self.meta.get("@rack_id")):
             logger.debug(f"Checking suction group mappings")
@@ -569,7 +624,7 @@ class Point(aobject):
                         "num_circuits", None
                     )
                 ) is not None:
-                    logger.info("Discovering circuits")
+                    logger.info(f"{self.name} Discovering circuits")
                     try:
                         for i in range(int(nc)):
                             circ = await self.parent_dbox.xml_interface.read_circuit(
@@ -581,11 +636,8 @@ class Point(aobject):
                             logger.debug(f"Circuit {x}_{y}_{i+1} added")
                     except:
                         pass
-
-            self.meta["read_suction_group"] = self.parent_dbox.read_suction_group[
-                (x, y)
-            ]
-            self.meta["read_circuit"] = self.parent_dbox.read_circuit[(x, y)]
+            self.meta["read_suction_group_ref"] = (x, y)
+            self.meta["read_circuit_ref"] = (x, y)
 
 
 class Mod:
@@ -626,9 +678,6 @@ class Node(aobject):
         self.mods: dict[str, Mod] = {}
         self.parent_nodetype = parent
         self.parent_dbox = self.parent_nodetype.parent_dbox
-        # self.read_device_summary = (
-        #     await self.parent_dbox.xml_interface.read_device_summary(self.node_id)
-        # )
         logger.debug(f"New node at {self.parent_dbox.xml_interface.ip}: {node_id}")
 
     async def add_mod(self, data):
@@ -662,293 +711,3 @@ class Nodetype:
         if node_id not in self.nodes:
             self.nodes[node_id] = await Node(node_id, self)
         await self.nodes[node_id].add_mod(data)
-
-
-# Normalization
-def normalize_data(data):
-    # pre-process
-    for each in [
-        "aux_heats",
-        "cooling_stages",
-        "heat_reclaims",
-        "inputs",
-        "relays",
-        "sensors",
-    ]:
-        one_down = each[:-1]
-        if isinstance(data.get(each, {}).get(one_down, None), dict):
-            data[each][one_down] = [data[each][one_down]]
-
-        if isinstance(
-            data.get(each, {}).get("nightsetback", {}).get("schedule", None), list
-        ):
-            data[each]["nightsetback"]["schedule"] = data[each]["nightsetback"][
-                "schedule"
-            ][0]
-
-    if isinstance(
-        data.get("dehumid_type", {}).get("stages", {}).get("stage", None), dict
-    ):
-        data["dehumid_type"]["stages"]["stage"] = [
-            data["dehumid_type"]["stages"]["stage"]
-        ]
-
-    def deep_get(keys, default=None):
-        try:
-            return reduce(lambda d, k: d.get(k, {}), keys, data) or default
-        except AttributeError:
-            return default
-
-    ret = {
-        "nodetype": data.get("@nodetype"),
-        "node": data.get("@node"),
-        "mod": data.get("@mod"),
-        "point": data.get("@point"),
-        "rack_id": data.get("@rack_id"),
-        "suction_id": data.get("@suction_id"),
-        "name": data.get("@name"),
-        "alternate_name": data.get("name"),
-        "alternate_value": data.get("@value"),
-        "type": data.get("type"),
-        "value": data.get("#text"),
-        "setpoint": data.get("@ctrl_val"),
-        "offset": data.get("@offset"),
-        "status": data.get("@status"),
-        "modelname": data.get("@modelname"),
-        "alternate_setpoint": data.get("@setpoint"),
-        "device_id": data.get("device_id"),
-        "ordernum": data.get("@ordernum"),
-        "num_suction": data.get("num_suction"),
-        "alternate_status": data.get("status"),
-        "hvac_type": data.get("hvac_type"),
-        "meter": {
-            "kw": data.get("kw"),
-            "kwh": {
-                "value": data.get("kwh"),
-                "reset_epoch": data.get("kwh_reset_epoch"),
-            },
-            "peak": {
-                "reset_epoch": data.get("pk_reset_epoch"),
-                "epoch": data.get("pk_epoch"),
-                "kw": data.get("pk"),
-            },
-        },
-        "condenser": {
-            "alarm_high": {
-                "limit": f'{deep_get(["read_condenser", "almhi_limit", "#text"])} {deep_get(["read_condenser", "almhi_limit", "@units"])}',
-                "duration": f'{deep_get(["read_condenser", "almhi_dur", "#text"])} {deep_get(["read_condenser", "almhi_dur", "@units"])}',
-            },
-            "delta": f'{deep_get(["read_condenser", "cond_delta", "#text"])} {deep_get(["read_condenser", "cond_delta", "@units"])}',
-            "type": deep_get(["read_condenser", "cond_type", "#text"]),
-            "control_sensor": deep_get(["read_condenser", "control_type", "#text"]),
-            "control_type": deep_get(["read_condenser", "control_type", "#text"]),
-            "fans": {
-                "number": deep_get(["read_condenser", "fans", "@num_fans"]),
-                "type": deep_get(["read_condenser", "fans", "@type"]),
-            },
-            "condensing": {
-                "max": f'{deep_get(["read_condenser", "max_cond", "#text"])} {deep_get(["read_condenser", "max_cond", "@units"])}',
-                "min": f'{deep_get(["read_condenser", "min_cond", "#text"])} {deep_get(["read_condenser", "min_cond", "@units"])}',
-            },
-            "name": deep_get(["read_condenser", "name"]),
-            "value": f'{deep_get(["read_condenser", "value", "#text"])} {deep_get(["read_condenser", "value", "@units"])}',
-        },
-        "suction_group": {
-            "alarm_high": {
-                "limit": f'{deep_get(["read_suction_group", "almhi_limit", "#text"])} {deep_get(["read_suction_group", "almhi_limit", "@units"])}',
-                "duration": f'{deep_get(["read_suction_group", "almhi_dur", "#text"])} {deep_get(["read_suction_group", "almhi_dur", "@units"])}',
-            },
-            "alarm_low": {
-                "limit": f'{deep_get(["read_suction_group", "almlo_limit", "#text"])} {deep_get(["read_suction_group", "almlo_limit", "@units"])}',
-                "duration": f'{deep_get(["read_suction_group", "almlo_dur", "#text"])} {deep_get(["read_suction_group", "almlo_dur", "@units"])}',
-            },
-            "auto_schedule": deep_get(["read_suction_group", "auto_schedule"]),
-            "num_circuits": deep_get(["read_suction_group", "num_circuits"]),
-            "suction_control": deep_get(
-                ["read_suction_group", "suction_control", "@type"]
-            ),
-            "suction_cutout": f'{deep_get(["read_suction_group", "suction_cutout", "#text"])} {deep_get(["read_suction_group", "suction_cutout", "@units"])}',
-            "suction_target": f'{deep_get(["read_suction_group", "suction_target", "#text"])} {deep_get(["read_suction_group", "suction_target", "@units"])}',
-            "value": f'{deep_get(["read_suction_group", "value", "#text"])} {deep_get(["read_suction_group", "value", "@units"])}',
-            "name": deep_get(["read_suction_group", "name"]),
-        },
-        "aux_heats": {
-            "stages": [
-                {k.replace("@", ""): v for k, v in each.items()}
-                for each in deep_get(["aux_heats", "aux_heat"], [{"None": None}])
-            ],
-            "nightsetback": {
-                k.replace("@", ""): v
-                for k, v in deep_get(
-                    ["aux_heats", "nightsetback", "schedule"], {"None": None}
-                ).items()
-            },
-        },
-        "cooling_stages": {
-            "stages": [
-                {k.replace("@", ""): v for k, v in each.items()}
-                for each in deep_get(
-                    ["cooling_stages", "cooling_stage"], [{"None": None}]
-                )
-            ],
-            "nightsetback": {
-                k.replace("@", ""): v
-                for k, v in deep_get(
-                    ["cooling_stages", "nightsetback", "schedule"], {"None": None}
-                ).items()
-            },
-        },
-        "heat_reclaims": {
-            "stages": [
-                {k.replace("@", ""): v for k, v in each.items()}
-                for each in deep_get(
-                    ["heat_reclaims", "heat_reclaim"], [{"None": None}]
-                )
-            ],
-            "nightsetback": {
-                k.replace("@", ""): v
-                for k, v in deep_get(
-                    ["heat_reclaims", "nightsetback", "schedule"], {"None": None}
-                ).items()
-            },
-        },
-        "inputs": [
-            {k.replace("@", ""): v for k, v in each.items()}
-            for each in deep_get(["inputs", "input"], [{"None": None}])
-        ],
-        "relays": [
-            {k.replace("@", ""): v for k, v in each.items()}
-            for each in deep_get(["relays", "relay"], [{"None": None}])
-        ],
-        "sensors": [
-            {k.replace("@", ""): v for k, v in each.items()}
-            for each in deep_get(["sensors", "sensor"], [{"None": None}])
-        ],
-        "alarms": [
-            {
-                "ref": deep_get(["alarm_detail", alarm_id, "ref"]),
-                "ref_tag_id": deep_get(["alarm_detail", alarm_id, "ref_tag_id"]),
-                "status": deep_get(["alarm_detail", alarm_id, "status"]),
-                "clearable": deep_get(["alarm_detail", alarm_id, "clearable"]),
-                "action": deep_get(["alarm_detail", alarm_id, "action"]),
-                "name": deep_get(["alarm_detail", alarm_id, "name"]),
-                "setting": deep_get(["alarm_detail", alarm_id, "setting"]),
-                "acknowledge": {
-                    "account_number": str(
-                        int(deep_get(["alarm_detail", alarm_id, "ack"], 0)) % 256
-                    ),
-                    "authorization_number": str(
-                        int(deep_get(["alarm_detail", alarm_id, "ack"], 0)) // 256
-                    ),
-                    "acknowledgement": deep_get(
-                        ["alarm_detail", alarm_id, "acknowledgement"]
-                    ),
-                    "user_account": deep_get(["alarm_detail", alarm_id, "ackUserAcct"]),
-                },
-                "epoch": {
-                    "inactive": deep_get(["alarm_detail", alarm_id, "epoch_inactive"]),
-                    "cleared": deep_get(["alarm_detail", alarm_id, "epoch_cleared"]),
-                    "active": deep_get(["alarm_detail", alarm_id, "epoch"]),
-                },
-                "state": {
-                    "active": deep_get(["alarm_detail", alarm_id, "active_state"]),
-                    "acked": deep_get(["alarm_detail", alarm_id, "acked_state"]),
-                    "cleared": deep_get(["alarm_detail", alarm_id, "cleared_state"]),
-                },
-            }
-            for alarm_id in data.get("alarm_detail", {})
-        ],
-        "circuit": [
-            {
-                "id": circuit.get("@circuit_id"),
-                "defrost": {
-                    "type": circuit.get("defrosts", {}).get("@type"),
-                    "duration": circuit.get("defrosts", {}).get("defrost_dur"),
-                    "drip_delay": circuit.get("defrosts", {}).get("drip_delay"),
-                    "min_defrost_time": circuit.get("defrosts", {})
-                    .get("min_defrost", {})
-                    .get("#text"),
-                    "term": circuit.get("defrosts", {}).get("term", {}).get("@type"),
-                },
-                "name": circuit.get("name", {}).get("#text"),
-                "name_index": circuit.get("name", {}).get("@name_index"),
-                "status": circuit.get("status", {}).get("#text"),
-                "temperature": {
-                    "range": f'{circuit.get("temp_range", {}).get("#text")} {circuit.get("temp_range", {}).get("@units")}',
-                    "target": f'{circuit.get("temp_target", {}).get("#text")} {circuit.get("temp_target", {}).get("@units")}',
-                    "control": circuit.get("temp_control", {}).get("#text"),
-                },
-            }
-            for circuit in data.get("read_circuit", [])
-        ],
-        "leak_devices": data.get("leak_devices", []),
-    }
-
-    # post-process
-    ret = {k: v for k, v in ret.items() if v is not None}
-
-    if ret.get("condenser").get("type") is None:
-        del ret["condenser"]
-
-    if ret.get("suction_group").get("name") is None:
-        del ret["suction_group"]
-
-    if ret.get("meter").get("kw") is None:
-        del ret["meter"]
-
-    # if ret.get("alarms") == []:
-    #     del ret["alarms"]
-
-    for each in ["aux_heats", "cooling_stages", "heat_reclaims"]:
-        if ret.get(each).get("stages") == [{"None": None}]:
-            del ret[each]
-    for each in ["sensors", "relays", "inputs"]:
-        if ret.get(each) == [{"None": None}]:
-            del ret[each]
-
-    final = {}
-    for k, v in ret.items():
-        if "alternate_" in k and k.replace("alternate_", "") not in ret.keys():
-            final[k.replace("alternate_", "")] = v
-        else:
-            final[k] = v
-    return final
-
-
-def ret_to_array_schema(ret: dict) -> dict:
-    id_fields = ["nodetype", "node", "mod", "point"]
-    id_block = {k: ret.get(k) for k in id_fields if k in ret}
-
-    keys = []
-    values = []
-
-    def walk(obj, prefix=""):
-        if isinstance(obj, Mapping):
-            for k, v in obj.items():
-                new_prefix = f"{prefix}__{k}" if prefix else k
-                walk(v, new_prefix)
-        elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
-            for idx, v in enumerate(obj):
-                new_prefix = f"{prefix}[{idx}]"
-                walk(v, new_prefix)
-        else:
-            keys.append(prefix)
-            values.append(obj)
-
-    walk(
-        {k: v for k, v in ret.items() if k not in ("nodetype", "node", "mod", "point")}
-    )
-
-    return {
-        "id": id_block,
-        "denorm_keys": keys,
-        "denorm_values": values,
-    }
-
-
-def denormalize_data(data, ip: str):
-    ret = normalize_data(data)
-    fin = ret_to_array_schema(ret)
-    fin["id"]["ip"] = ip
-    fin["timestamp"] = datetime.now(timezone.utc).isoformat()
-    return fin

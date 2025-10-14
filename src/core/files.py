@@ -58,6 +58,7 @@ default_general = {
     "httpRequestDelay": 3,
     "httpTimeoutDelay": 3,
     "httpRetryCount": 3,
+    "publishIntervalSeconds": 30,
 }
 
 default_ip = {
