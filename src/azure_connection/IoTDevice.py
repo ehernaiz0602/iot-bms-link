@@ -46,6 +46,15 @@ else:
 
 
 class IoTDevice:
+    """
+    The edge device class. Responsible for provisioning and connecting to IoTHub
+    As well as denormalizing and sending data to IoTHub from the bms
+
+    Methods:
+        connect(): connect the device to IoTHub
+        send_message(data: list[dict]): send a semi-denormalized series of messages
+    """
+
     def __init__(self):
         logger.info(f"Creating IoTDevice instance")
         self.hostname: str = ""
