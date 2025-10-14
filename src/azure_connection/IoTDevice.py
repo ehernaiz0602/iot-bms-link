@@ -14,17 +14,35 @@ import json
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 import copy
+import subprocess
+import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+with open(core.AZURE_SETTINGS, "r") as f:
+    azure_settings = json.load(f)
 
 if platform.system() == "Linux":
     certificate = core.PARENT_DIRECTORY / "development_keys" / "CertificateTest.pfx"
 else:
-    certificate = None
-    raise NotImplementedError("Only Linux is supported right now")
+    if getattr(sys, "frozen", False):
+        script_dir = Path(sys._MEIPASS) / "export_pfx.ps1"
+    else:
+        script_dir = Path(__file__).parent / "export_pfx.ps1"
 
-with open(core.AZURE_SETTINGS, "r") as f:
-    azure_settings = json.load(f)
+    subprocess.run(
+        [
+            "powershell",
+            str(script_dir),
+            "-Subject",
+            f"*{azure_settings.get('certificate_subject')}*",
+            "-OutputPath",
+            str(core.CERTIFICATE),
+        ],
+        check=True,
+    )
+    certificate = core.CERTIFICATE
 
 
 class IoTDevice:

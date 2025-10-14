@@ -1,13 +1,21 @@
 from pathlib import Path
 import logging
 import json
+import sys
 
 logger = logging.getLogger(__name__)
 
 
+def get_root_directory():
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    else:
+        return Path(__file__).parent.parent.parent
+
+
+PARENT_DIRECTORY = get_root_directory()
+
 # Folder structure
-SRC_DIRECTORY = Path(__file__).resolve().parent.parent
-PARENT_DIRECTORY = SRC_DIRECTORY.parent
 CONFIG_DIRECTORY = PARENT_DIRECTORY / "config"
 DATA_DIRECTORY = PARENT_DIRECTORY / "data"
 LOG_DIRECTORY = PARENT_DIRECTORY / "logs"
@@ -25,7 +33,6 @@ CERTIFICATE = DATA_DIRECTORY / "certificate.pfx"
 LOG = LOG_DIRECTORY / "log.jsonl"
 
 DIRECTORIES = {
-    "src": SRC_DIRECTORY,
     "parent": PARENT_DIRECTORY,
     "config": CONFIG_DIRECTORY,
     "data": DATA_DIRECTORY,
