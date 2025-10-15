@@ -5,3 +5,10 @@ pyinstaller --onefile ^
     --add-data "config/Settings-IP.json;config" ^
     --add-data "config/Settings-General.json;config" ^
     src/main.py
+
+IF EXIST dist\main.exe (
+    copy /Y dist\main.exe .
+    echo main.exe copied to root directory.
+) ELSE (
+    echo Build failed: dist\main.exe not found.
+)

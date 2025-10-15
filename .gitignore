@@ -18,6 +18,7 @@ development_keys/
 *.env
 *.pem
 *.pfx
+poetry.lock
 
 
 # FROM OCTOCAT #
