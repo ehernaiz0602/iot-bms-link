@@ -8,6 +8,7 @@ references/
 __pycache__/
 venv/
 development_keys/
+.pytest_cache/
 
 # Files #
 #########
