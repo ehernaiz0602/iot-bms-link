@@ -19,6 +19,7 @@ development_keys/
 *.pem
 *.pfx
 poetry.lock
+version.txt
 
 
 # FROM OCTOCAT #
