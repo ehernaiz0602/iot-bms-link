@@ -69,7 +69,6 @@ default_general = {
 }
 
 default_ip = {
-    "store_id": "0000",
     "danfoss": [
         {
             "ip": "1.1.1.1",

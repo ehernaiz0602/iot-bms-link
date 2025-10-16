@@ -24,7 +24,7 @@ class DanfossBox:
         self.xml_interface = DanfossXMLInterface(ip)
         self.ip = ip
         self.name = name
-        self.polling: bool = False
+        self.initialized: bool = False
         self.nodetypes: dict[str, Nodetype] = {}
         self.hvacs: dict = {}  # Address table of ahindex: Point
         self.lighting: dict = {}  # Address table of index: Point
@@ -52,7 +52,8 @@ class DanfossBox:
             try:
                 await getattr(self, each)()
             except:
-                logger.warning(f"No function implemented for {each}")
+                logger.warning(f"Error applying {each}")
+        self.initialized = True
         logging.info("Finished initial discovery")
 
     async def add_nodetype(self, data: dict):
@@ -101,9 +102,8 @@ class DanfossBox:
 
     async def discover_additional_metadata(self):
         self.schedule_summary = await self.xml_interface.schedule_summary()
-        # self.read_date_time = await self.xml_interface.read_date_time()
         self.read_units = await self.xml_interface.read_units()
-        self.read_store_schedule = self.xml_interface.read_store_schedule()
+        self.read_store_schedule = await self.xml_interface.read_store_schedule()
 
     async def discover_hvacs(self):
         logger.info(f"{self.name} Starting HVACs discovery")
@@ -480,7 +480,6 @@ class DanfossBox:
 
     @logtimer
     async def update_all(self):
-        self.polling_status = True
         logger.info(f"{self.name} Starting update loop")
         await self.update_nodetype_0()
         await self.update_nodetype_1()
@@ -494,17 +493,6 @@ class DanfossBox:
         await self.update_hvacs()
         await self.update_circuit_suction()
         logger.info(f"{self.name} Finished update loop")
-        self.polling_status = False
-
-    async def poll_forever(self):
-        await self.initialize()
-        logger.info(f"{self.name} is about to begin its polling loop")
-        await asyncio.sleep(10)
-        while True:
-            logger.info(f"{self.name} has begun its polling loop")
-            await self.update_all()
-            logger.info(f"{self.name} is waiting one minute before next update loop")
-            await asyncio.sleep(60)
 
     def print_hierarchy(self):
         root = Tree(f"[bold]{self.xml_interface.ip}[/bold]")

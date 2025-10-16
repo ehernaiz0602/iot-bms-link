@@ -12,11 +12,11 @@ import hmac
 import logging
 import json
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
-import copy
 import subprocess
 import sys
 from pathlib import Path
+import functools
+import inspect
 
 logger = logging.getLogger(__name__)
 
@@ -31,18 +31,48 @@ else:
     else:
         script_dir = Path(__file__).parent / "export_pfx.ps1"
 
-    subprocess.run(
-        [
-            "powershell",
-            str(script_dir),
-            "-Subject",
-            f"*{azure_settings.get('certificate_subject')}*",
-            "-OutputPath",
-            str(core.CERTIFICATE),
-        ],
-        check=True,
-    )
-    certificate = core.CERTIFICATE
+    try:
+        subprocess.run(
+            [
+                "powershell",
+                str(script_dir),
+                "-Subject",
+                f"*{azure_settings.get('certificate_subject')}*",
+                "-OutputPath",
+                str(core.CERTIFICATE),
+            ],
+            check=True,
+        )
+        certificate = core.CERTIFICATE
+    except Exception as e:
+        logger.error(f"Could not load the certificate file: {e}")
+
+
+def check_valid_device(func):
+    """
+    Decorator to check whether the IoTDevice is properly defined.
+    Works with both async and sync methods.
+    """
+    if inspect.iscoroutinefunction(func):
+
+        @functools.wraps(func)
+        async def async_wrapper(self, *args, **kwargs):
+            if not self.valid_device:
+                logger.warning("The IoTDevice definition is not valid.")
+                return self.valid_device
+            return await func(self, *args, **kwargs)
+
+        return async_wrapper
+    else:
+
+        @functools.wraps(func)
+        def sync_wrapper(self, *args, **kwargs):
+            if not self.valid_device:
+                logger.warning("The IoTDevice definition is not valid.")
+                return self.valid_device
+            return func(self, *args, **kwargs)
+
+        return sync_wrapper
 
 
 class IoTDevice:
@@ -55,28 +85,36 @@ class IoTDevice:
         send_message(data: list[dict]): send a semi-denormalized series of messages
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         logger.info(f"Creating IoTDevice instance")
         self.hostname: str = ""
         self.device_key: str = ""
         self.connected: bool = False
+        self.valid_device: bool = False
         self.device_client: IoTHubDeviceClient | None = None
-        self.device_id: str = azure_settings.get("store_id")
-        self.scope_id: str = azure_settings.get("scope_id")
-        self.secret_name: str = azure_settings.get("secret_name")
-        keyvault_url: str = (
-            f"https://{azure_settings.get('vault_name')}.vault.azure.net/"
-        )
-        self.credential: CertificateCredential = CertificateCredential(
-            azure_settings.get("tenant_id"),
-            azure_settings.get("client_id"),
-            certificate,
-        )
-        self.secret_client: SecretClient = SecretClient(
-            vault_url=keyvault_url, credential=self.credential
-        )
+        try:
+            self.device_id: str = azure_settings.get("store_id")
+            self.scope_id: str = azure_settings.get("scope_id")
+            self.secret_name: str = azure_settings.get("secret_name")
+            keyvault_url: str = (
+                f"https://{azure_settings.get('vault_name')}.vault.azure.net/"
+            )
+            self.credential: CertificateCredential = CertificateCredential(
+                azure_settings.get("tenant_id"),
+                azure_settings.get("client_id"),
+                certificate,
+            )
+            self.secret_client: SecretClient = SecretClient(
+                vault_url=keyvault_url, credential=self.credential
+            )
+            self.valid_device = True
+        except Exception as e:
+            logger.warning(
+                f"Could not initialize edge device. Check azure settings file: {e}"
+            )
         self.sas_ttl: int = azure_settings.get("sas_ttl", 0) * 24 * 60 * 60
 
+    @check_valid_device
     async def provision_device(self):
         try:
             logger.debug(f"Trying to provision device")
@@ -103,6 +141,7 @@ class IoTDevice:
         except Exception as e:
             logger.warning(f"Could not provision device: {e}")
 
+    @check_valid_device
     async def connect(self):
         try:
             if self.hostname == "":
@@ -126,83 +165,83 @@ class IoTDevice:
             self.connected = False
             logger.debug(f"Not able to connect to IoTHub. Error: {e}")
 
-    async def send_message(self, data: list[dict], ip: str):
+    @check_valid_device
+    async def send_message(self, data: list[dict]):
         if not self.connected:
             await self.connect()
 
         if not self.connected:
-            logger.warning("Could not send message to IoTHub: Failure to connect.")
+            logger.warning("Could not send message to IoTHub: failure to connect.")
             return
 
-        frames = [self.denormalize_dict(d, ip) for d in data]
-        frames = [f for f in frames if f is not None]
-
-        master_frame = {
-            "packets": [],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
+        frames = [f for d in data if (f := self.denormalize_dict(d)) is not None]
+        send_buf = []
 
         for frame in frames:
-            base_packet = {
-                "id": frame["id"],
-                "keys": [],
-                "values": [],
-            }
+            keys = frame["keys"]
+            values = frame["values"]
+            frame_id = frame["id"]
+            start = 0
 
-            for k, v in zip(frame["keys"], frame["values"]):
-                base_packet["keys"].append(k)
-                base_packet["values"].append(v)
+            while start < len(keys):
+                low, high = 1, len(keys) - start
+                best_chunk = 1
 
-                packet_copy = copy.deepcopy(base_packet)
-                master_frame["packets"].append(packet_copy)
-
-                payload = json.dumps(master_frame)
-                message = Message(payload)
-                size = message.get_size()
-
-                if size >= (256 * 1024) - 512:
-                    # Remove last packet and send
-                    master_frame["packets"].pop()
-                    base_packet["keys"].pop()
-                    base_packet["values"].pop()
-
-                    payload = json.dumps(master_frame)
-                    message = Message(payload)
-                    await self.device_client.send_message(message)
-                    logger.info(
-                        f"Sent message to IoTHub with size {message.get_size()}"
-                    )
-
-                    # Reset master_frame and continue with current base_packet
-                    master_frame = {
-                        "packets": [],
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                while low <= high:
+                    mid = (low + high) // 2
+                    chunk = {
+                        "id": frame_id,
+                        "keys": keys[start : start + mid],
+                        "values": values[start : start + mid],
                     }
-                    master_frame["packets"].append(copy.deepcopy(base_packet))
+                    test_buf = send_buf + [chunk]
+                    message = Message(json.dumps(test_buf))
+                    size = message.get_size()
 
-        # Final send if master_frame has leftover packets
-        if master_frame["packets"]:
-            payload = json.dumps(master_frame)
-            message = Message(payload)
+                    if size < 261_632:
+                        best_chunk = mid
+                        low = mid + 1
+                    else:
+                        high = mid - 1
+
+                # Add the best chunk to the buffer
+                chunk = {
+                    "id": frame_id,
+                    "keys": keys[start : start + best_chunk],
+                    "values": values[start : start + best_chunk],
+                }
+                send_buf.append(chunk)
+                start += best_chunk
+
+                # Check if buffer is full
+                message = Message(json.dumps(send_buf))
+                if message.get_size() >= 261_632:
+                    await self.device_client.send_message(message)
+                    pass
+                    logger.info(
+                        f"Sent batch of {len(send_buf)} frames, size {message.get_size()}"
+                    )
+                    send_buf = []
+
+        if send_buf:
+            message = Message(json.dumps(send_buf))
             await self.device_client.send_message(message)
-            logger.info(f"Sent final message to IoTHub with size {message.get_size()}")
+            pass
+            logger.info(
+                f"Sent final batch of {len(send_buf)} frames, size {message.get_size()}"
+            )
 
-    def disconnect(self):
+    @check_valid_device
+    async def disconnect(self):
         logging.info(f"Disconnecting from IoTHub")
         if self.connected:
-            asyncio.run(self.device_client.disconnect())
+            await self.device_client.disconnect()
             logging.info(f"Disconnected from IoTHub")
         else:
             logging.debug(f"Device was not connected to IoTHub")
 
-    def denormalize_dict(self, ret: dict, ip: str) -> dict | None:
-        id_fields = ["@nodetype", "@node", "@mod", "@point"]
-        id_block = {k: ret.get(k) for k in id_fields if k in ret}
-        id_block["ip"] = ip
-
-        keys = []
-        values = []
-
+    @check_valid_device
+    def denormalize_dict(self, ret: dict) -> dict | None:
         def walk(obj, prefix=""):
             if isinstance(obj, Mapping):
                 for k, v in obj.items():
@@ -219,13 +258,13 @@ class IoTDevice:
                 values.append(obj)
 
         try:
-            walk(
-                {
-                    k: v
-                    for k, v in ret.items()
-                    if k not in ("nodetype", "node", "mod", "point")
-                }
-            )
+            id_fields = ["@nodetype", "@node", "@mod", "@point", "ip"]
+            id_block = {k: ret.get(k) for k in id_fields if k in ret}
+
+            keys: list[str] = []
+            values: list[str] = []
+
+            walk({k: v for k, v in ret.items() if k not in id_fields})
         except Exception as e:
             logger.error(f"Could not denormalize data: {e}")
             return None

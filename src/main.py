@@ -3,7 +3,7 @@ import logging
 import core
 from store import store
 
-__version__: str = "v0.0.1"
+__version__: str = "v0.1.0"
 __author__: str = "Henry Hernaiz <hernaizhenry@gmail.com>"
 
 logger = logging.getLogger(__name__)
