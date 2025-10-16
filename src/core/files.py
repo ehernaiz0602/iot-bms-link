@@ -66,6 +66,7 @@ default_general = {
     "httpTimeoutDelay": 3,
     "httpRetryCount": 3,
     "publishIntervalSeconds": 30,
+    "useErrFiles": True,
 }
 
 default_ip = {

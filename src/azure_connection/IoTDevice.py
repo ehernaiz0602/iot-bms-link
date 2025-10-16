@@ -17,11 +17,15 @@ import sys
 from pathlib import Path
 import functools
 import inspect
+import os
 
 logger = logging.getLogger(__name__)
 
 with open(core.AZURE_SETTINGS, "r") as f:
     azure_settings = json.load(f)
+
+with open(core.GENERAL_SETTINGS, "r") as f:
+    general_settings = json.load(f)
 
 if platform.system() == "Linux":
     certificate = core.PARENT_DIRECTORY / "development_keys" / "CertificateTest.pfx"
@@ -148,7 +152,7 @@ class IoTDevice:
                 try:
                     await self.provision_device()
                 except:
-                    raise Exception()
+                    raise
 
             self.device_client = IoTHubDeviceClient.create_from_symmetric_key(
                 symmetric_key=self.device_key,
@@ -161,9 +165,25 @@ class IoTDevice:
                 f"Device {self.device_id} is ready to receive messages in IoTHub"
             )
             self.connected = True
+
+            if os.path.exists(core.PARENT_DIRECTORY / "IOTHUB.err"):
+                logger.info(f"Removing IOTHUB.err")
+                try:
+                    os.remove(core.PARENT_DIRECTORY / "IOTHUB.err")
+                except Exception as e:
+                    logger.error(f"Cannot delete IOTHUB.err file: {e}")
+
         except Exception as e:
             self.connected = False
-            logger.debug(f"Not able to connect to IoTHub. Error: {e}")
+            logger.error(f"Not able to connect to IoTHub. Error: {e}")
+
+            if general_settings.get("useErrFiles", False):
+                logger.warning(f"Writing IOTHUB.err")
+                path_obj = core.PARENT_DIRECTORY / "IOTHUB.err"
+                try:
+                    path_obj.touch()
+                except Exception as e:
+                    logger.error(f"Cannot touch IOTHUB.err file: {e}")
 
     @check_valid_device
     async def send_message(self, data: list[dict]):
@@ -175,7 +195,7 @@ class IoTDevice:
             return
 
         frames = [f for d in data if (f := self.denormalize_dict(d)) is not None]
-        send_buf = []
+        send_buf: list[dict] = []
 
         for frame in frames:
             keys = frame["keys"]
