@@ -3,6 +3,7 @@ import logging
 import core
 from store import store
 import json
+import bms
 
 __version__: str = "v0.2.0"
 __author__: str = "Henry Hernaiz <hernaizhenry@gmail.com>"

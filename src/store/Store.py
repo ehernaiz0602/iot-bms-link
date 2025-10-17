@@ -32,12 +32,21 @@ class Store:
     edge_device: azure_connection.IoTDevice = azure_connection.IoTDevice()
 
     def __post_init__(self):
+        # Add danfoss
         danfoss = ip_settings.get("danfoss", {})
         for panel in danfoss:
             panel_ip = panel.get("ip", "")
             panel_name = panel.get("name", "")
             if panel_ip:
                 self.danfoss_panels.append(bms.DanfossBox(panel_ip, panel_name))
+
+        # Add emerson e3
+        emerson3 = ip_settings.get("emerson_e3", {})
+        for panel in emerson3:
+            panel_ip = panel.get("ip", "")
+            panel_name = panel.get("name", "")
+            if panel_ip:
+                self.emerson3_panels.append(bms.E3Box(panel_ip, panel_name))
 
     async def mainloop(self):
         await self.edge_device.connect()

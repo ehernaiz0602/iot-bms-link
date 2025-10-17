@@ -7,7 +7,6 @@ from tenacity import (
     retry,
     stop_after_attempt,
     wait_fixed,
-    retry_if_exception_type,
 )
 import asyncio
 import aiohttp
@@ -81,8 +80,6 @@ class DanfossXMLInterface:
     def __init__(
         self,
         ip: str,
-        timeout: int = 3,
-        retries: int = 3,
     ):
         self.ip = ip
         self.endpoint = f"http://{ip}/http/xml.cgi"
