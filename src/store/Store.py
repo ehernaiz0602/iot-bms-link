@@ -55,6 +55,7 @@ class Store:
             logger.info(f"Starting next loop")
             try:
                 await self.danfoss_tasks()
+                await self.emerson_e3_tasks()
             except Exception as e:
                 logger.error(f"Error: {e}")
 
@@ -94,8 +95,24 @@ class Store:
 
             await self.edge_device.send_message(data)
 
-        if len(self.danfoss_panels) == 0:
-            return
+        if len(self.danfoss_panels) != 0:
+            await update_danfoss()
+            await send_danfoss()
 
-        await update_danfoss()
-        await send_danfoss()
+    async def emerson_e3_tasks(self):
+        async def update_e3():
+            for panel in self.emerson3_panels:
+                await panel.update_all()
+
+        async def send_e3():
+            data = []
+
+            for panel in self.emerson3_panels:
+                this_data = panel.get_data()
+                data.extend(this_data)
+
+            await self.edge_device.send_message(data)
+
+        if len(self.emerson3_panels) != 0:
+            await update_e3()
+            await send_e3()

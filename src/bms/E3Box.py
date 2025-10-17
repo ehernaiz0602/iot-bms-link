@@ -14,6 +14,44 @@ class E3Box:
         self.ip = ip
         self.name = name
         self.groups: dict[str, Group] = {}
+        self.unit_info: dict[str, str] = {}
+
+    def get_data(self) -> list[dict]:
+        data: list[dict] = []
+
+        for g in self.groups.values():
+            for a in g.applications.values():
+                if a.alarms:
+                    alarm_record = {
+                        "@node": g.name,
+                        "@mod": a.iid,
+                        "ip": self.unit_info.get("ip"),
+                        "appname": a.appname,
+                        "apptype": a.apptype,
+                        "category": a.category,
+                        "categorydef": a.categorydef,
+                        "alarms": a.alarms,
+                        "@point": "alarm_record",  # No specific PID associated
+                        "description": "Application-level alarms",
+                    }
+                    data.append(alarm_record)
+
+                for p in a.pids.values():
+                    pid_record = {
+                        "@node": g.name,
+                        "@mod": a.iid,
+                        "@point": p.pid,
+                        "ip": self.unit_info.get("ip"),
+                        "appname": a.appname,
+                        "apptype": a.apptype,
+                        "category": a.category,
+                        "categorydef": a.categorydef,
+                        "val": p.present_value,
+                        "description": p.normal_name,
+                    }
+                    data.append(pid_record)
+
+        return data
 
     async def get_groups(self):
         logger.info(f"{self.name} is getting groups")
@@ -26,7 +64,19 @@ class E3Box:
             }
         logger.info(f"{self.name} finished getting groups")
 
+    async def get_unit_info(self):
+        logger.info(f"Getting {self.name} system information")
+        result = await self.http_interface.get_system_information()
+        if result:
+            self.unit_info = result.get("result", {})
+            self.unit_info["ip"] = self.ip
+            logger.info(f"Successfully updated {self.name}'s system information")
+        else:
+            logger.error(f"Could not update {self.name}'s system information")
+
     async def update_all(self):
+        if self.unit_info == {}:
+            await self.get_unit_info()
         logger.info(f"{self.name} is updating all data")
         await self.get_alarms()
         await self.get_values()
@@ -54,6 +104,7 @@ class E3Box:
                 for app in group.applications.values():
                     try:
                         app.alarms = alarm_buf[app.iid]
+                        app.alarms = app.alarms[:100]
                     except Exception as e:
                         logger.warning(f"No app to attach alarm to: {e}")
         logger.info(f"{self.name} finished updating alarm data")
@@ -69,7 +120,12 @@ class E3Box:
                 pid_map = {f"{app.iid}:{pid.pid}": pid for pid in app.pids.values()}
 
                 request_buffer = [{"ptr": ptr} for ptr in pid_map.keys()]
-                response = await self.http_interface.get_point_values(request_buffer)
+                if len(request_buffer) != 0:
+                    response = await self.http_interface.get_point_values(
+                        request_buffer
+                    )
+                else:
+                    response = None
 
                 if response:
                     points = response.get("result", {}).get("points", [])
@@ -89,12 +145,17 @@ class E3Box:
         if self.groups == {}:
             await self.get_inventory()
 
+        logger.info(f"{self.name} is loading list of used points")
         lgriids = await self.http_interface.get_default_log_group()
 
         if lgriids:
             lgriids = lgriids.get("result", {}).get("lgriid", [])
             lgriids = [lgriids] if not isinstance(lgriids, list) else lgriids
+            logger.info(f"{self.name} finished loading all used points")
+        else:
+            logger.error(f"{self.name} could not load all used points")
 
+        logger.info(f"{self.name} is loading application descriptions")
         pointerbuf: dict[str, dict[str, Pid]] = {}
         descrbuf: dict[str, dict[str, dict[str, str]]] = {}
         for lgriid in lgriids:
@@ -139,6 +200,7 @@ class E3Box:
                     for pid in pids.values():
                         pid.parent_application = application
                     application.pids = pids
+        logger.info(f"{self.name} finished loading application descriptions")
 
     async def get_inventory(self):
         if self.groups == {}:
@@ -155,7 +217,9 @@ class E3Box:
                     ] = Application(each, self.groups[categorydef])
 
     def print_hierarchy(self):
-        root = Tree(f"[bold]{self.ip}[/bold]")
+        root = Tree(
+            f"[bold]{self.unit_info.get('unitname', 'unknown_name')}[/bold] @ {self.ip} | V{self.unit_info.get('unitversion', 'unknown_version')}"
+        )
 
         for gname, g in self.groups.items():
             if g.applications != {}:
