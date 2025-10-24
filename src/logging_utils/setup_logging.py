@@ -75,8 +75,11 @@ LOGGING_CONFIG = {
 
 
 def setup_logging():
-    logging.config.dictConfig(LOGGING_CONFIG)
-    queue_handler = logging.getHandlerByName("queue_handler")
-    if queue_handler is not None:
-        queue_handler.listener.start()
-        atexit.register(queue_handler.listener.stop)
+    try:
+        logging.config.dictConfig(LOGGING_CONFIG)
+        queue_handler = logging.getHandlerByName("queue_handler")
+        if queue_handler is not None:
+            queue_handler.listener.start()
+            atexit.register(queue_handler.listener.stop)
+    except Exception as e:
+        print(f"Error: {e}")
