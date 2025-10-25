@@ -187,6 +187,18 @@ class IoTDevice:
 
     @check_valid_device
     async def send_message(self, data: list[dict]):
+        """
+        Send IoT data in the new schema:
+        [
+            {
+                "device": str,
+                "schema": [...],
+                "records": [[...], [...], ...]
+            },
+            ...
+        ]
+        Batching is done to ensure message < 256 KB.
+        """
         if not self.connected:
             await self.connect()
 
@@ -194,31 +206,37 @@ class IoTDevice:
             logger.warning("Could not send message to IoTHub: failure to connect.")
             return
 
-        frames = [f for d in data if (f := self.denormalize_dict(d)) is not None]
         send_buf: list[dict] = []
 
-        for frame in frames:
-            keys = frame["keys"]
-            values = frame["values"]
-            frame_id = frame["id"]
-            start = 0
+        for device_data in data:
+            device_id = device_data.get("device") or device_data.get("id", {}).get(
+                "ip", "unknown"
+            )
+            # Use denormalize_dict if the input is still old-style
+            records = device_data.get("records", [])
+            schema = device_data.get("schema", [])
 
-            while start < len(keys):
-                low, high = 1, len(keys) - start
+            if not records or not schema:
+                continue
+
+            start = 0
+            while start < len(records):
+                # Binary search to maximize number of records in this chunk
+                low, high = 1, len(records) - start
                 best_chunk = 1
 
                 while low <= high:
                     mid = (low + high) // 2
                     chunk = {
-                        "id": frame_id,
-                        "keys": keys[start : start + mid],
-                        "values": values[start : start + mid],
+                        "device": device_id,
+                        "schema": schema,
+                        "records": records[start : start + mid],
                     }
                     test_buf = send_buf + [chunk]
                     message = Message(json.dumps(test_buf))
                     size = message.get_size()
 
-                    if size < 261_632:
+                    if size < 256_000:
                         best_chunk = mid
                         low = mid + 1
                     else:
@@ -226,29 +244,28 @@ class IoTDevice:
 
                 # Add the best chunk to the buffer
                 chunk = {
-                    "id": frame_id,
-                    "keys": keys[start : start + best_chunk],
-                    "values": values[start : start + best_chunk],
+                    "device": device_id,
+                    "schema": schema,
+                    "records": records[start : start + best_chunk],
                 }
                 send_buf.append(chunk)
                 start += best_chunk
 
-                # Check if buffer is full
+                # If buffer is full, send
                 message = Message(json.dumps(send_buf))
-                if message.get_size() >= 261_632:
+                if message.get_size() >= 256_000:
                     await self.device_client.send_message(message)
-                    pass
                     logger.info(
-                        f"Sent batch of {len(send_buf)} frames, size {message.get_size()}"
+                        f"Sent batch of {len(send_buf)} device frames, size {message.get_size()}"
                     )
                     send_buf = []
 
+        # Send any remaining records
         if send_buf:
             message = Message(json.dumps(send_buf))
             await self.device_client.send_message(message)
-            pass
             logger.info(
-                f"Sent final batch of {len(send_buf)} frames, size {message.get_size()}"
+                f"Sent final batch of {len(send_buf)} device frames, size {message.get_size()}"
             )
 
     @check_valid_device
@@ -259,41 +276,6 @@ class IoTDevice:
             logging.info(f"Disconnected from IoTHub")
         else:
             logging.debug(f"Device was not connected to IoTHub")
-
-    @check_valid_device
-    def denormalize_dict(self, ret: dict) -> dict | None:
-        def walk(obj, prefix=""):
-            if isinstance(obj, Mapping):
-                for k, v in obj.items():
-                    new_prefix = f"{prefix}__{k}" if prefix else k
-                    walk(v, new_prefix)
-            elif isinstance(obj, Sequence) and not isinstance(
-                obj, (str, bytes, bytearray)
-            ):
-                for idx, v in enumerate(obj):
-                    new_prefix = f"{prefix}[{idx}]"
-                    walk(v, new_prefix)
-            else:
-                keys.append(prefix)
-                values.append(obj)
-
-        try:
-            id_fields = ["@nodetype", "@node", "@mod", "@point", "ip"]
-            id_block = {k: ret.get(k) for k in id_fields if k in ret}
-
-            keys: list[str] = []
-            values: list[str] = []
-
-            walk({k: v for k, v in ret.items() if k not in id_fields})
-        except Exception as e:
-            logger.error(f"Could not denormalize data: {e}")
-            return None
-
-        return {
-            "id": id_block,
-            "keys": keys,
-            "values": values,
-        }
 
     def __repr__(self):
         return f"IoTDevice(device_id={self.device_id}, connected={self.connected})"

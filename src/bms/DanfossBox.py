@@ -554,6 +554,7 @@ class DanfossBox:
             "@node": "0",
             "@mod": "0",
             "@point": "0",
+            "ip": self.ip,
             "read_suction_group": self.read_suction_group,
             "read_condenser": self.read_condenser,
             "read_circuit": self.read_circuit,
@@ -580,6 +581,7 @@ class Point(aobject):
         logger.debug(
             f"New point at {self.parent_dbox.xml_interface.ip}: {self.point_id}"
         )
+        self.meta["ip"] = self.parent_dbox.xml_interface.ip
 
         await self.get_condenser_data()
         await self.get_suction_group_data()

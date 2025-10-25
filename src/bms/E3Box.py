@@ -25,6 +25,7 @@ class E3Box:
                     alarm_record = {
                         "@node": g.name,
                         "@mod": a.iid,
+                        "@nodetype": "novalue",
                         "ip": self.unit_info.get("ip"),
                         "appname": a.appname,
                         "apptype": a.apptype,
