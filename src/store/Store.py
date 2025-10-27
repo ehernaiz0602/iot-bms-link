@@ -43,6 +43,7 @@ class Store:
     )  # minimum seconds between publishes
 
     last_full_restart: float = field(default=0.0)
+    last_full_frame: float = field(default=0.0)
 
     def add_danfoss(self):
         self.danfoss_panels = []
@@ -85,6 +86,7 @@ class Store:
         self.add_emerson3()
         self.add_emerson2()
         self.last_full_restart = time.monotonic()
+        self.last_full_frame = time.monotonic()
 
         while True:
             now = time.monotonic()
