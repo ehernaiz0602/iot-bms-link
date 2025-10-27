@@ -1,4 +1,6 @@
 from dataclasses import dataclass, field
+
+from numpy import full
 import core
 import json
 import bms
@@ -32,7 +34,10 @@ class Store:
         default_factory=lambda: database.DBInterface()
     )
 
-    full_restart_interval: float = 12 * 60 * 60  # 12 hours
+    full_restart_interval: float = general_settings.get(
+        "softResetIntervalHours", 12 * 60 * 60
+    )
+    full_frame_interval: float = general_settings.get("publishAllIntervalHours", 4)
     cov_poll_interval: float = general_settings.get(
         "publishInvervalSeconds", 30
     )  # minimum seconds between publishes
@@ -73,6 +78,7 @@ class Store:
         """Main execution loop: full restart every 12 hours, CoV updates otherwise."""
         await self.edge_device.connect()
         await self.db_interface.initialize()
+        await self.db_interface.clear_table("data_table")
 
         # Initial panel setup
         self.add_danfoss()
@@ -90,8 +96,17 @@ class Store:
                     )
                     await self.full_restart()
                     self.last_full_restart = time.monotonic()
+
+                # Full frame every self.full_frame_interval hours
+                elif now - self.last_full_frame >= self.full_frame_interval * 3600:
+                    logger.info(
+                        "Sending full frame due to publishAllIntervalHours interval"
+                    )
+                    await self.send_cov_frames(full_frame=True)
+                    self.last_full_frame = time.monotonic()
+
                 else:
-                    await self.send_cov_frames()
+                    await self.send_cov_frames(full_frame=False)
 
             except Exception as e:
                 logger.error(f"Error in main loop: {e}")
@@ -122,18 +137,18 @@ class Store:
         except:
             logger.debug(f"No emerson 2")
 
-    async def send_cov_frames(self):
+    async def send_cov_frames(self, full_frame=False):
         """Send only CoV (change-of-value) data."""
         try:
-            await self.gather_and_send_danfoss(full_frame=False)
+            await self.gather_and_send_danfoss(full_frame=full_frame)
         except:
             logger.debug(f"No danfoss")
         try:
-            await self.gather_and_send_emerson3(full_frame=False)
+            await self.gather_and_send_emerson3(full_frame=full_frame)
         except:
             logger.debug(f"No emerson3")
         try:
-            self.gather_and_send_emerson2(full_frame=False)
+            self.gather_and_send_emerson2(full_frame=full_frame)
         except:
             logger.debug(f"No emerson 2")
 

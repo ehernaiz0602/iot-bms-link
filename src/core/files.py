@@ -67,6 +67,7 @@ default_general = {
     "httpRetryCount": 3,
     "publishIntervalSeconds": 30,
     "publishAllIntervalHours": 4,
+    "softResetIntervalHours": 12,
     "useErrFiles": True,
 }
 
