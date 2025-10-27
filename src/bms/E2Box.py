@@ -2,7 +2,7 @@ import logging
 from typing import override
 from .E2SocketInterface import E2SocketInterface
 from dataclasses import dataclass, field
-import re
+
 
 logger = logging.getLogger(__name__)
 

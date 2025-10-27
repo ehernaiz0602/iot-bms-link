@@ -8,6 +8,7 @@ import core
 import asyncio
 from tenacity import Retrying, stop_after_attempt, wait_fixed
 import atexit
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,9 @@ class E2SocketInterface:
         self.recv_size: int = recv_size
         self.timeout: int = general_settings.get("httpTimeoutDelay", 3)
         self.retries: int = general_settings.get("httpRetryCount", 3)
-        self.request_delay: int = general_settings.get("httpRequestDelay", 3)
+        self.request_delay: int = general_settings.get(
+            "httpRequestDelay", 3
+        )  # Not using HTTP but good enough descriptor
         s = socks.socksocket()
         if platform.system() == "Linux":
             s.set_proxy(socks.SOCKS5, "127.0.0.1", 1080)
@@ -77,7 +80,9 @@ class E2SocketInterface:
                 break
             except Exception as e:
                 logger.error(f"Unhandled exception: {e}")
+                self.socket_open = False
                 raise e
+        time.sleep(self.request_delay)
         return data
 
     def hex_dump(self, data: bytes):
@@ -95,7 +100,9 @@ class E2SocketInterface:
         )
         self.socket.sendall(command)
         response: bytes = self.socket.recv(self.recv_size)
+        time.sleep(self.request_delay)
         if not response:
+            self.socket_open = False
             raise ValueError("Invalid response received")
         return response
 
@@ -107,6 +114,7 @@ class E2SocketInterface:
         self.socket.sendall(command)
         response: bytes = self.recv_all()
         if not response:
+            self.socket_open = False
             raise ValueError("Invalid response received")
         return response
 
@@ -118,5 +126,6 @@ class E2SocketInterface:
         self.socket.sendall(command)
         response: bytes = self.recv_all()
         if not response:
+            self.socket_open = False
             raise ValueError("Invalid response received")
         return response

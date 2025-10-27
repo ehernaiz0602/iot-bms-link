@@ -59,6 +59,16 @@ class Store:
                 if panel_ip:
                     self.emerson3_panels.append(bms.E3Box(panel_ip, panel_name))
 
+    def add_emerson2(self):
+        self.emerson2_panels = []
+        emerson_config = ip_settings.get("emerson_e3", [])
+        if len(emerson_config) > 0:
+            for panel in emerson_config:
+                panel_ip = panel.get("ip", "")
+                panel_name = panel.get("name", "")
+                if panel_ip:
+                    self.emerson2_panels.append(bms.E2Box(panel_ip, panel_name))
+
     async def mainloop(self):
         """Main execution loop: full restart every 12 hours, CoV updates otherwise."""
         await self.edge_device.connect()
@@ -67,6 +77,7 @@ class Store:
         # Initial panel setup
         self.add_danfoss()
         self.add_emerson3()
+        self.add_emerson2()
         self.last_full_restart = time.monotonic()
 
         while True:
@@ -96,6 +107,7 @@ class Store:
         await self.db_interface.clear_table("data_table")
         self.add_danfoss()
         self.add_emerson3()
+        self.add_emerson2()
 
         try:
             await self.gather_and_send_danfoss(full_frame=True)
@@ -105,6 +117,10 @@ class Store:
             await self.gather_and_send_emerson3(full_frame=True)
         except:
             logger.debug(f"No emerson 3")
+        try:
+            self.gather_and_send_emerson2(full_frame=True)
+        except:
+            logger.debug(f"No emerson 2")
 
     async def send_cov_frames(self):
         """Send only CoV (change-of-value) data."""
@@ -116,6 +132,16 @@ class Store:
             await self.gather_and_send_emerson3(full_frame=False)
         except:
             logger.debug(f"No emerson3")
+        try:
+            self.gather_and_send_emerson2(full_frame=False)
+        except:
+            logger.debug(f"No emerson 2")
+
+    def gather_and_send_emerson2(self, full_frame=False):
+        # Temporary test to try test stability of emerson e2
+        # TODO: MAKE E2 ASYNC!!! Probably not necessary immediately because 1 panel sees all others
+        for panel in self.emerson2_panels:
+            panel.get_controllers()
 
     async def gather_and_send_danfoss(self, full_frame=False):
         """Gather and send data from Danfoss panels."""
