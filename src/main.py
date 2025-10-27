@@ -4,7 +4,7 @@ import core
 from store import store
 import json
 
-__version__: str = "v0.3.0"
+__version__: str = "v0.3.1"
 __author__: str = "Henry Hernaiz <hernaizhenry@gmail.com>"
 
 logger = logging.getLogger(__name__)

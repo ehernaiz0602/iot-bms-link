@@ -34,8 +34,10 @@ class E2Box:
         self.controllers: list[Controller] = []
 
     def get_controllers(self):
+        logger.info(f"{self.name} is getting controllers")
         result = self.socket_interface.get_controllers()
 
+        self.controllers: list[Controller] = []
         if isinstance(result, bytes):
             logger.info(f"{self.name} is updating controller list")
             snippet = result[32:]
@@ -52,6 +54,8 @@ class E2Box:
                     Controller(name=name, controller_number=controller_number)
                 )
                 i += 23
+            logger.info(f"{self.name} finished updating controller list!")
+            logger.info(f"{self.name} found controllers: {self.controllers}")
         else:
             logger.error(f"{self.name} could not update controller list")
 

@@ -61,7 +61,7 @@ class Store:
 
     def add_emerson2(self):
         self.emerson2_panels = []
-        emerson_config = ip_settings.get("emerson_e3", [])
+        emerson_config = ip_settings.get("emerson_e2", [])
         if len(emerson_config) > 0:
             for panel in emerson_config:
                 panel_ip = panel.get("ip", "")
@@ -140,6 +140,7 @@ class Store:
     def gather_and_send_emerson2(self, full_frame=False):
         # Temporary test to try test stability of emerson e2
         # TODO: MAKE E2 ASYNC!!! Probably not necessary immediately because 1 panel sees all others
+        logger.debug(f"TESTING EMERSON 2 FUNCTIONALITY")
         for panel in self.emerson2_panels:
             panel.get_controllers()
 
