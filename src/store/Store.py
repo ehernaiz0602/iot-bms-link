@@ -1,6 +1,4 @@
 from dataclasses import dataclass, field
-
-from numpy import full
 import core
 import json
 import bms
@@ -79,6 +77,7 @@ class Store:
         """Main execution loop: full restart every 12 hours, CoV updates otherwise."""
         await self.edge_device.connect()
         await self.db_interface.initialize()
+        await self.db_interface.ensure_table("data_table")
         await self.db_interface.clear_table("data_table")
 
         # Initial panel setup
@@ -98,6 +97,7 @@ class Store:
                     )
                     await self.full_restart()
                     self.last_full_restart = time.monotonic()
+                    self.last_full_frame = time.monotonic()
 
                 # Full frame every self.full_frame_interval hours
                 elif now - self.last_full_frame >= self.full_frame_interval * 3600:

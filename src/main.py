@@ -28,7 +28,14 @@ def main() -> None:
             except Exception as e:
                 logger.error(f"Cannot write version file: {e}")
 
-    asyncio.run(store.mainloop())
+    try:
+        asyncio.run(store.mainloop())
+    except KeyboardInterrupt:
+        logger.info("You stopped the program (KeyboardInterrupt)")
+    except Exception as e:
+        logger.critical(f"Unexpected exception: {e}", exc_info=True)
+    finally:
+        logger.info(f"Exiting application cleanly.")
 
 
 if __name__ == "__main__":
