@@ -7,6 +7,7 @@ import asyncio
 import logging
 import time
 import database
+import os
 
 with open(core.IP_SETTINGS, "r") as f:
     ip_settings = json.load(f)
@@ -15,6 +16,10 @@ with open(core.GENERAL_SETTINGS, "r") as f:
     general_settings = json.load(f)
 
 logger = logging.getLogger(__name__)
+
+REQ_WAT = (
+    100  # naiive number of consequtive failed requests needed to hard stop program
+)
 
 
 @dataclass
@@ -156,7 +161,6 @@ class Store:
     def gather_and_send_emerson2(self, full_frame=False):
         # Temporary test to try test stability of emerson e2
         # TODO: MAKE E2 ASYNC!!! Probably not necessary immediately because 1 panel sees all others
-        logger.debug(f"TESTING EMERSON 2 FUNCTIONALITY")
         for panel in self.emerson2_panels:
             panel.get_controllers()
 
@@ -181,6 +185,14 @@ class Store:
         iot_data = await self.db_interface.fetch_cov_data(data, full_frame=full_frame)
         await self.edge_device.send_message(iot_data)
 
+        if all(
+            [f.xml_interface.failed_requests > REQ_WAT for f in self.danfoss_panels]
+        ):
+            logger.critical(
+                f"Unrecoverable danfoss bms connection error. Shutting down"
+            )
+            os._exit(1)
+
     async def gather_and_send_emerson3(self, full_frame=False):
         """Gather and send data from Emerson3 panels."""
         update_tasks = [panel.update_all() for panel in self.emerson3_panels]
@@ -193,3 +205,10 @@ class Store:
 
         iot_data = await self.db_interface.fetch_cov_data(data, full_frame=full_frame)
         await self.edge_device.send_message(iot_data)
+        if all(
+            [f.http_interface.failed_requests > REQ_WAT for f in self.emerson3_panels]
+        ):
+            logger.critical(
+                f"Unrecoverable danfoss bms connection error. Shutting down"
+            )
+            os._exit(1)

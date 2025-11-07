@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import platform
 import core
 import asyncio
@@ -18,6 +19,7 @@ from pathlib import Path
 import functools
 import inspect
 import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +70,9 @@ def check_valid_device(func):
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
             if not self.valid_device:
-                logger.warning("The IoTDevice definition is not valid.")
-                return self.valid_device
+                logger.error("The IoTDevice definition is not valid.")
+                os._exit(1)
+                # return self.valid_device
             return await func(self, *args, **kwargs)
 
         return async_wrapper
@@ -78,11 +81,69 @@ def check_valid_device(func):
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
             if not self.valid_device:
-                logger.warning("The IoTDevice definition is not valid.")
-                return self.valid_device
+                logger.error("The IoTDevice definition is not valid.")
+                os._exit(1)
+                # return self.valid_device
             return func(self, *args, **kwargs)
 
         return sync_wrapper
+
+
+@dataclass
+class IoTWatchdog:
+    time_down: float = time.monotonic()
+    has_been_offline: bool = False
+    number_retries: int = 0
+    state: int = 1
+
+    """
+    state 1: connection failed
+    state 2: connection success
+    state 3: final state - shutting down
+    """
+
+    def transition_function(self, success_state: bool):
+        now = time.monotonic()
+
+        match self.state:
+            case 1:
+                if (
+                    (self.number_retries > 10)
+                    and (not self.has_been_offline)
+                    and (not success_state)
+                ):
+                    self.state = 3
+                    logger.debug("IOT transition to STOP")
+                elif (
+                    (self.number_retries > 10)
+                    and (self.has_been_offline)
+                    and (now - self.time_down > 1800)
+                    and (not success_state)
+                ):
+                    self.state = 3
+                    logger.debug("IOT transition to STOP")
+                elif success_state:
+                    self.number_retries = 0
+                    self.time_down = now
+                    self.has_been_offline = True
+                    self.state = 2
+                    logger.debug("IOT transition to CONNECTED")
+                else:
+                    self.number_retries += 1
+                    logger.debug("IOT transition to DISCONNECTED")
+            case 2:
+                if not success_state:
+                    self.number_retries += 1
+                    self.state = 1
+                    logger.debug("IOT transition to DISCONNECTED")
+                else:
+                    self.time_down = now
+                    self.number_retries = 0
+                    logger.debug("IOT transition to CONNECTED")
+
+        if self.state == 3:
+            logger.critical("Unrecoverable state for IoTHub connection, shutting down")
+            os._exit(1)
 
 
 class IoTDevice:
@@ -102,6 +163,7 @@ class IoTDevice:
         self.connected: bool = False
         self.valid_device: bool = False
         self.device_client: IoTHubDeviceClient | None = None
+        self.watchdog = IoTWatchdog()
         try:
             self.device_id: str = azure_settings.get("store_id")
             self.scope_id: str = azure_settings.get("scope_id")
@@ -158,6 +220,7 @@ class IoTDevice:
                 try:
                     await self.provision_device()
                 except:
+                    self.watchdog.transition_function(False)
                     raise
 
             self.device_client = IoTHubDeviceClient.create_from_symmetric_key(
@@ -171,6 +234,7 @@ class IoTDevice:
                 f"Device {self.device_id} is ready to receive messages in IoTHub"
             )
             self.connected = True
+            self.watchdog.transition_function(True)
             await asyncio.sleep(0.5)
 
             if os.path.exists(core.PARENT_DIRECTORY / "IOTHUB.err"):
@@ -266,6 +330,7 @@ class IoTDevice:
                     except Exception as e:
                         logger.error(f"Could not send to IoTHub: {e}")
                         self.connected = False
+                        self.watchdog.transition_function(False)
                         return
                     batch = []
 

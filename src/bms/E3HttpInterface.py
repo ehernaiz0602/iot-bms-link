@@ -61,6 +61,7 @@ class E3HttpInterface:
         self.session_id: Optional[str] = None
         self.username: str = username
         self.password: str = password
+        self.failed_requests: int = 0
         self.http_headers = {
             "Accept": "*/*",
         }
@@ -119,13 +120,16 @@ class E3HttpInterface:
                 try:
                     s.raise_for_status()
                     text = await s.text()
+                    self.failed_requests = 0
                     return json.loads(text)
                 except json.JSONDecodeError:
                     logger.error(f"Failed to decode JSON from request")
                     return None
                 except aiohttp.ClientResponseError as e:
                     logger.error(f"GET request at {self.ip} failed: {e}")
+                    self.failed_requests += 1
                 except Exception as e:
+                    self.failed_requests += 1
                     logger.error(f"Unexpected error: {e}")
                 return None
 
@@ -151,10 +155,13 @@ class E3HttpInterface:
                     return json.loads(text)
                 except json.JSONDecodeError:
                     logger.error(f"Failed to decode JSON from request")
+                    self.failed_requests = 0
                     return None
                 except aiohttp.ClientResponseError as e:
+                    self.failed_requests += 1
                     logger.error(f"GET request at {self.ip} failed: {e}")
                 except Exception as e:
+                    self.failed_requests += 1
                     logger.error(f"Unexpected error: {e}")
                 return None
 

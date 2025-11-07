@@ -55,9 +55,11 @@ def process_command(func):
         try:
             response_text = await send_request(connector, timeout)
             logger.debug(f"Response received from {self.endpoint}")
+            self.failed_requests = 0
         except Exception as e:
             logger.warning(f"Final failure after {self.retries} retries: {e}")
             await asyncio.sleep(sleep)
+            self.failed_requests += 1
             return {
                 "@action": action,
                 "@error": "Connection Error",
@@ -85,6 +87,7 @@ class DanfossXMLInterface:
         self.endpoint = f"http://{ip}/http/xml.cgi"
         self.timeout = general_settings.get("httpTimeoutDelay", 3)
         self.retries = general_settings.get("httpRetryCount", 3)
+        self.failed_requests: int = 0
 
         self.http_headers = {
             "Connection": "close",

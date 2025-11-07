@@ -5,7 +5,7 @@ from store import store
 import json
 import os
 
-__version__: str = "v0.4.0"
+__version__: str = "v0.5.0"
 __author__: str = "Henry West <hernaizhenry@gmail.com>"
 
 logger = logging.getLogger(__name__)

@@ -22,3 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Fixed a bug where certificates could not properly be loaded sometimes
 
 ---
+
+## [0.5.0] - 2025-11-07
+
+### Added
+
+- IoTHub finite state machine watchdog to guarantee hard stopping if IoTHub is unreachable
+- Small watchdog for BMS connection state
+
+### Fixed
+
+- Fixed a bug when setting up logging when no configuration files exist

@@ -7,8 +7,12 @@ import json
 import os
 
 
-with open(GENERAL_SETTINGS, "r") as f:
-    general_settings = json.load(f)
+try:
+    with open(GENERAL_SETTINGS, "r") as f:
+        general_settings = json.load(f)
+except:
+    print("Warning: no general settings file. Using default fallbacks")
+    general_settings = {}
 
 LOGGING_CONFIG = {
     "version": 1,
