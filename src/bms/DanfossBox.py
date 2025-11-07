@@ -614,7 +614,7 @@ class Point(aobject):
                         "num_circuits", None
                     )
                 ) is not None:
-                    logger.info(f"{self.name} Discovering circuits")
+                    logger.info(f"Discovering circuits")
                     try:
                         for i in range(int(nc)):
                             circ = await self.parent_dbox.xml_interface.read_circuit(

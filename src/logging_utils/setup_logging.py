@@ -2,6 +2,13 @@ import logging
 import logging.config
 import colorlog
 import atexit
+from core.files import GENERAL_SETTINGS
+import json
+import os
+
+
+with open(GENERAL_SETTINGS, "r") as f:
+    general_settings = json.load(f)
 
 LOGGING_CONFIG = {
     "version": 1,
@@ -75,6 +82,29 @@ LOGGING_CONFIG = {
 
 
 def setup_logging():
+
+    match str(general_settings.get("loggingLevel", "DEBUG")).upper():
+        case "DEBUG":
+            level = "DEBUG"
+        case "INFO":
+            level = "INFO"
+        case "WARNING":
+            level = "WARNING"
+        case "ERROR":
+            level = "ERROR"
+        case "CRITICAL":
+            level = "CRITICAL"
+        case _:
+            level = "DEBUG"
+
+    LOGGING_CONFIG["loggers"]["root"]["level"] = level
+    LOGGING_CONFIG["handlers"]["file"]["maxBytes"] = (
+        general_settings.get("logFileMaxSizeMB", 2) * 1024 * 1024
+    )
+    LOGGING_CONFIG["handlers"]["file"]["backupCount"] = general_settings.get(
+        "logFileBackupCount", 3
+    )
+
     try:
         logging.config.dictConfig(LOGGING_CONFIG)
         queue_handler = logging.getHandlerByName("queue_handler")
@@ -83,3 +113,7 @@ def setup_logging():
             atexit.register(queue_handler.listener.stop)
     except Exception as e:
         print(f"Error: {e}")
+        print(
+            "ERROR: THERE IS A PROBLEM WITH YOUR CONFIGURATION FILES. PLEASE FIX AND RE-RUN"
+        )
+        os._exit(1)

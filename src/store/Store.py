@@ -24,6 +24,7 @@ class Store:
     """
 
     danfoss_panels: list = field(default_factory=list)
+    emerson2_panels: list = field(default_factory=list)
     emerson3_panels: list = field(default_factory=list)
     edge_device: "azure_connection.IoTDevice" = field(
         default_factory=lambda: azure_connection.IoTDevice()
@@ -32,9 +33,7 @@ class Store:
         default_factory=lambda: database.DBInterface()
     )
 
-    full_restart_interval: float = general_settings.get(
-        "softResetIntervalHours", 12 * 60 * 60
-    )
+    full_restart_interval: float = general_settings.get("softResetIntervalHours", 12)
     full_frame_interval: float = general_settings.get("publishAllIntervalHours", 4)
     cov_poll_interval: float = general_settings.get(
         "publishInvervalSeconds", 30
@@ -91,7 +90,7 @@ class Store:
             now = time.monotonic()
             try:
                 # Check if it's time for a full restart
-                if now - self.last_full_restart >= self.full_restart_interval:
+                if now - self.last_full_restart >= self.full_restart_interval * 3600:
                     logger.info(
                         "Performing full restart: clearing DB and sending full frames"
                     )

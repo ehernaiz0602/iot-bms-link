@@ -48,8 +48,14 @@ else:
             check=True,
         )
         certificate = core.CERTIFICATE
+        if not certificate.exists():
+            logger.error(f"Couldn't export certificate file.")
+            logger.critical(f"HARD STOP: Shutting down")
+            os._exit(1)
     except Exception as e:
         logger.error(f"Could not load the certificate file: {e}")
+        logger.critical(f"HARD STOP: Shutting down")
+        os._exit(1)
 
 
 def check_valid_device(func):
@@ -165,6 +171,7 @@ class IoTDevice:
                 f"Device {self.device_id} is ready to receive messages in IoTHub"
             )
             self.connected = True
+            await asyncio.sleep(0.5)
 
             if os.path.exists(core.PARENT_DIRECTORY / "IOTHUB.err"):
                 logger.info(f"Removing IOTHUB.err")
@@ -197,7 +204,7 @@ class IoTDevice:
             },
             ...
         ]
-        Batching is done to ensure message < 256 KB.
+        Batches multiple devices into a single message, as long as total size < 230 KB.
         """
         if not self.connected:
             await self.connect()
@@ -206,13 +213,11 @@ class IoTDevice:
             logger.warning("Could not send message to IoTHub: failure to connect.")
             return
 
-        send_buf: list[dict] = []
-
+        batch = []
         for device_data in data:
             device_id = device_data.get("device") or device_data.get("id", {}).get(
                 "ip", "unknown"
             )
-            # Use denormalize_dict if the input is still old-style
             records = device_data.get("records", [])
             schema = device_data.get("schema", [])
 
@@ -221,7 +226,7 @@ class IoTDevice:
 
             start = 0
             while start < len(records):
-                # Binary search to maximize number of records in this chunk
+                # Binary search to find max chunk size for this device
                 low, high = 1, len(records) - start
                 best_chunk = 1
 
@@ -232,41 +237,49 @@ class IoTDevice:
                         "schema": schema,
                         "records": records[start : start + mid],
                     }
-                    test_buf = send_buf + [chunk]
-                    message = Message(json.dumps(test_buf))
-                    size = message.get_size()
-
-                    if size < 256_000:
+                    test_batch = batch + [chunk]
+                    message = Message(json.dumps(test_batch))
+                    if message.get_size() < 230_000:
                         best_chunk = mid
                         low = mid + 1
                     else:
                         high = mid - 1
 
-                # Add the best chunk to the buffer
+                # Add the best chunk to the batch
                 chunk = {
                     "device": device_id,
                     "schema": schema,
                     "records": records[start : start + best_chunk],
                 }
-                send_buf.append(chunk)
+                batch.append(chunk)
                 start += best_chunk
 
-                # If buffer is full, send
-                message = Message(json.dumps(send_buf))
-                if message.get_size() >= 256_000:
-                    await self.device_client.send_message(message)
-                    logger.info(
-                        f"Sent batch of {len(send_buf)} device frames, size {message.get_size()}"
-                    )
-                    send_buf = []
+                # If batch is near full, send it
+                message = Message(json.dumps(batch))
+                if message.get_size() >= 230_000:
+                    try:
+                        await self.device_client.send_message(message)
+                        logger.info(
+                            f"Sent batch of {len(batch)} device chunks, size {message.get_size()} bytes"
+                        )
+                        await asyncio.sleep(0.5)
+                    except Exception as e:
+                        logger.error(f"Could not send to IoTHub: {e}")
+                        self.connected = False
+                        return
+                    batch = []
 
-        # Send any remaining records
-        if send_buf:
-            message = Message(json.dumps(send_buf))
-            await self.device_client.send_message(message)
-            logger.info(
-                f"Sent final batch of {len(send_buf)} device frames, size {message.get_size()}"
-            )
+        # Send any remaining data
+        if batch:
+            message = Message(json.dumps(batch))
+            try:
+                await self.device_client.send_message(message)
+                logger.info(
+                    f"Sent final batch of {len(batch)} device chunks, size {message.get_size()} bytes"
+                )
+            except Exception as e:
+                logger.error(f"Could not send final batch to IoTHub: {e}")
+                self.connected = False
 
     @check_valid_device
     async def disconnect(self):

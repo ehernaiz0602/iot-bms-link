@@ -1,9 +1,9 @@
 [project]
 name = "iot-bms-link"
-version = "0.3.1"
+version = "0.4.0"
 description = "A cloud-bms gateway driver"
 authors = [
-    {name = "Henry Hernaiz",email = "hernaizhenry@gmail.com"}
+    {name = "Henry West",email = "hernaizhenry@gmail.com"}
 ]
 license = {text = "MIT"}
 readme = "README.md"
@@ -111,5 +111,6 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 dev = [
-    "pytest (>=8.4.2,<9.0.0)"
+    "pytest (>=8.4.2,<9.0.0)",
+    "pytest-asyncio (>=1.2.0,<2.0.0)"
 ]

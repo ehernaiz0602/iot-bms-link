@@ -3,9 +3,10 @@ import logging
 import core
 from store import store
 import json
+import os
 
-__version__: str = "v0.3.1"
-__author__: str = "Henry Hernaiz <hernaizhenry@gmail.com>"
+__version__: str = "v0.4.0"
+__author__: str = "Henry West <hernaizhenry@gmail.com>"
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,12 @@ def main() -> None:
         asyncio.run(store.mainloop())
     except KeyboardInterrupt:
         logger.info("You stopped the program (KeyboardInterrupt)")
+        os._exit(1)
     except Exception as e:
         logger.critical(f"Unexpected exception: {e}", exc_info=True)
     finally:
-        logger.info(f"Exiting application cleanly.")
+        logger.info(f"Exiting application.")
+        os._exit(1)
 
 
 if __name__ == "__main__":

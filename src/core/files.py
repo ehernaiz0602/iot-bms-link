@@ -63,6 +63,8 @@ default_azure = {
 default_general = {
     "loggingLevel": "info",
     "httpRequestDelay": 3,
+    "logFileMaxSizeMB": 2,
+    "logFileBackupCount": 3,
     "httpTimeoutDelay": 3,
     "httpRetryCount": 3,
     "publishIntervalSeconds": 30,
