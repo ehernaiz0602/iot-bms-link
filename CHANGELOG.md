@@ -33,3 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Fixed a bug when setting up logging when no configuration files exist
+
+---
+
+## [0.5.0] - 2025-11-07
+
+### Fixed
+
+- Fixed danfoss alarms not getting their own grouping
