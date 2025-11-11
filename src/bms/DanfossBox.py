@@ -362,6 +362,10 @@ class DanfossBox:
                         for k, v in details.items()
                         if k not in ["@nodetype", "@node", "@mod", "@point"]
                     }
+                    final["@nodetype"] = f"alarm_{ref}"
+                    final["@node"] = f"alarm_{ref}"
+                    final["@mod"] = f"alarm_{ref}"
+                    final["@point"] = f"alarm_{ref}"
                 await self.add_nodetype(final)
 
         active_refs = alarm_references.get("active", {}).get("ref", None)
