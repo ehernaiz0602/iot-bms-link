@@ -17,9 +17,7 @@ with open(core.GENERAL_SETTINGS, "r") as f:
 
 logger = logging.getLogger(__name__)
 
-REQ_WAT = (
-    100  # naiive number of consequtive failed requests needed to hard stop program
-)
+REQ_WAT = general_settings.get("failConnectionNumber", 100)
 
 
 @dataclass

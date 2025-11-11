@@ -322,6 +322,10 @@ class IoTDevice:
                 message = Message(json.dumps(batch))
                 if message.get_size() >= 230_000:
                     try:
+                        if general_settings.get("writeIoTPayloadToLocalFile", False):
+                            with open(core.IOTPAYLOADS, "w+") as f:
+                                json.dump(batch, f, indent=2)
+                            logger.info("Overwriting last message to IOTPAYLOAD.json")
                         await self.device_client.send_message(message)
                         logger.info(
                             f"Sent batch of {len(batch)} device chunks, size {message.get_size()} bytes"
@@ -338,6 +342,10 @@ class IoTDevice:
         if batch:
             message = Message(json.dumps(batch))
             try:
+                if general_settings.get("writeIoTPayloadToLocalFile", False):
+                    with open(core.IOTPAYLOADS, "w+") as f:
+                        json.dump(batch, f, indent=2)
+                    logger.info("Overwriting last message to IOTPAYLOAD.json")
                 await self.device_client.send_message(message)
                 logger.info(
                     f"Sent final batch of {len(batch)} device chunks, size {message.get_size()} bytes"

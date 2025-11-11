@@ -32,6 +32,9 @@ CERTIFICATE = DATA_DIRECTORY / "certificate.pfx"
 # log files
 LOG = LOG_DIRECTORY / "log.jsonl"
 
+# Test files
+IOTPAYLOADS = PARENT_DIRECTORY / "IOTPAYLOAD.json"
+
 DIRECTORIES = {
     "parent": PARENT_DIRECTORY,
     "config": CONFIG_DIRECTORY,
@@ -46,6 +49,7 @@ FILES = {
     "database": DATABASE,
     "certificate": CERTIFICATE,
     "log": LOG,
+    "iotpayloads": IOTPAYLOADS,
 }
 
 # default files
@@ -71,6 +75,8 @@ default_general = {
     "publishAllIntervalHours": 4,
     "softResetIntervalHours": 12,
     "useErrFiles": True,
+    "writeIoTPayloadToLocalFile": True,
+    "failConnectionNumber": 100,
 }
 
 default_ip = {

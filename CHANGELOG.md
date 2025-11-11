@@ -36,8 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.5.0] - 2025-11-07
+## [0.5.1] - 2025-11-09
 
 ### Fixed
 
 - Fixed danfoss alarms not getting their own grouping
+
+---
+
+## [0.6.0] - 2025-11-11
+
+### Added
+
+- Added testing mode to General-Settings file to dump IoT payloads to a local file
+- Added configurable number of failed requests to mark an IP as stale/unreachable. Calculate expected program timeout by (retries x request_delay x failedConnNum)
