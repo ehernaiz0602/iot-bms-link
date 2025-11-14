@@ -42,10 +42,10 @@ class E2SocketInterface:
         self.ip: str = ip
         self.port: int = port
         self.recv_size: int = recv_size
-        self.timeout: int = general_settings.get("httpTimeoutDelay", 3)
-        self.retries: int = general_settings.get("httpRetryCount", 3)
+        self.timeout: int = general_settings.get("http_timeout_delay", 3)
+        self.retries: int = general_settings.get("http_retry_count", 3)
         self.request_delay: int = general_settings.get(
-            "httpRequestDelay", 3
+            "http_request_delay", 3
         )  # Not using HTTP but good enough descriptor
         s = socks.socksocket()
         if platform.system() == "Linux":

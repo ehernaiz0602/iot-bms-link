@@ -21,6 +21,7 @@ development_keys/
 *.pfx
 poetry.lock
 version.txt
+IOTPAYLOAD.json
 
 
 # FROM OCTOCAT #

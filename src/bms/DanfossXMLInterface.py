@@ -22,7 +22,7 @@ with open(core.GENERAL_SETTINGS, "r") as f:
 
 def process_command(func):
     async def wrapper(self, *args, **kwargs):
-        sleep = general_settings.get("httpRequestDelay", 3)
+        sleep = general_settings.get("http_request_delay", 3)
         element: ET.Element = func(self, *args, **kwargs)
         action: str = element.attrib.get("action", "unknown")
         element_string: str = ET.tostring(element, encoding="unicode")
@@ -85,8 +85,8 @@ class DanfossXMLInterface:
     ):
         self.ip = ip
         self.endpoint = f"http://{ip}/http/xml.cgi"
-        self.timeout = general_settings.get("httpTimeoutDelay", 3)
-        self.retries = general_settings.get("httpRetryCount", 3)
+        self.timeout = general_settings.get("http_timeout_delay", 3)
+        self.retries = general_settings.get("http_retry_count", 3)
         self.failed_requests: int = 0
 
         self.http_headers = {

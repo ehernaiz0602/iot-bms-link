@@ -184,7 +184,11 @@ class IoTDevice:
             logger.warning(
                 f"Could not initialize edge device. Check azure settings file: {e}"
             )
-        self.sas_ttl: int = azure_settings.get("sas_ttl", 0) * 24 * 60 * 60
+        try:
+            self.sas_ttl: int = int(azure_settings.get("sas_ttl", 90) * 24 * 60 * 60)
+        except:
+            logger.warning(f"sas ttl setting is not valid. Defaulting to 90 days")
+            self.sas_ttl = 90 * 24 * 60 * 60
 
     @check_valid_device
     async def provision_device(self):
@@ -248,7 +252,7 @@ class IoTDevice:
             self.connected = False
             logger.error(f"Not able to connect to IoTHub. Error: {e}")
 
-            if general_settings.get("useErrFiles", False):
+            if general_settings.get("use_err_files", False):
                 logger.warning(f"Writing IOTHUB.err")
                 path_obj = core.PARENT_DIRECTORY / "IOTHUB.err"
                 try:
@@ -322,7 +326,9 @@ class IoTDevice:
                 message = Message(json.dumps(batch))
                 if message.get_size() >= 230_000:
                     try:
-                        if general_settings.get("writeIoTPayloadToLocalFile", False):
+                        if general_settings.get(
+                            "write_iot_payload_to_local_file", False
+                        ):
                             with open(core.IOTPAYLOADS, "w+") as f:
                                 json.dump(batch, f, indent=2)
                             logger.info("Overwriting last message to IOTPAYLOAD.json")
@@ -342,7 +348,7 @@ class IoTDevice:
         if batch:
             message = Message(json.dumps(batch))
             try:
-                if general_settings.get("writeIoTPayloadToLocalFile", False):
+                if general_settings.get("write_iot_payload_to_local_file", False):
                     with open(core.IOTPAYLOADS, "w+") as f:
                         json.dump(batch, f, indent=2)
                     logger.info("Overwriting last message to IOTPAYLOAD.json")

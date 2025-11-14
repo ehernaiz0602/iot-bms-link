@@ -65,18 +65,18 @@ default_azure = {
 }
 
 default_general = {
-    "loggingLevel": "info",
-    "httpRequestDelay": 3,
-    "logFileMaxSizeMB": 2,
-    "logFileBackupCount": 3,
-    "httpTimeoutDelay": 3,
-    "httpRetryCount": 3,
-    "publishIntervalSeconds": 30,
-    "publishAllIntervalHours": 4,
-    "softResetIntervalHours": 12,
-    "useErrFiles": True,
-    "writeIoTPayloadToLocalFile": True,
-    "failConnectionNumber": 100,
+    "logging_level": "debug",
+    "log_file_max_size_mb": 2,
+    "log_file_backup_count": 3,
+    "http_request_delay": 2,
+    "http_timeout_delay": 3,
+    "http_retry_count": 5,
+    "publish_interval_seconds": 30,
+    "publish_all_interval_hours": 4,
+    "soft_reset_interval_hours": 12,
+    "use_err_files": False,
+    "write_iot_payload_to_local_file": False,
+    "fail_connection_number": 100,
 }
 
 default_ip = {

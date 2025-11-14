@@ -53,9 +53,9 @@ class E3HttpInterface:
     ):
         self.ip: str = ip
         self.endpoint: str = f"http://{ip}/cgi-bin/mgw.cgi"
-        self.timeout = general_settings.get("httpTimeoutDelay", 3)
-        self.retries = general_settings.get("httpRetryCount", 3)
-        self.request_delay = general_settings.get("httpRequestDelay", 3)
+        self.timeout = general_settings.get("http_timeout_delay", 3)
+        self.retries = general_settings.get("http_retry_count", 3)
+        self.request_delay = general_settings.get("http_request_delay", 3)
         self.id: int = 1
         self.session: Optional[aiohttp.ClientSession] = None
         self.session_id: Optional[str] = None

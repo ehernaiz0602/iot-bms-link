@@ -50,3 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Added testing mode to General-Settings file to dump IoT payloads to a local file
 - Added configurable number of failed requests to mark an IP as stale/unreachable. Calculate expected program timeout by (retries x request_delay x failedConnNum)
+
+---
+
+## [0.7.0] - 2025-11-14
+
+### Changed
+
+- Changed Settings-General to standardize all configuration keys to use lowercase underscores

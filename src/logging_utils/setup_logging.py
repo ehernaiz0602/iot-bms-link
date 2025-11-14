@@ -87,7 +87,7 @@ LOGGING_CONFIG = {
 
 def setup_logging():
 
-    match str(general_settings.get("loggingLevel", "DEBUG")).upper():
+    match str(general_settings.get("logging_level", "DEBUG")).upper():
         case "DEBUG":
             level = "DEBUG"
         case "INFO":
@@ -103,10 +103,10 @@ def setup_logging():
 
     LOGGING_CONFIG["loggers"]["root"]["level"] = level
     LOGGING_CONFIG["handlers"]["file"]["maxBytes"] = (
-        general_settings.get("logFileMaxSizeMB", 2) * 1024 * 1024
+        general_settings.get("log_file_max_size_mb", 2) * 1024 * 1024
     )
     LOGGING_CONFIG["handlers"]["file"]["backupCount"] = general_settings.get(
-        "logFileBackupCount", 3
+        "log_file_backup_count", 3
     )
 
     try:

@@ -17,7 +17,7 @@ with open(core.GENERAL_SETTINGS, "r") as f:
 
 logger = logging.getLogger(__name__)
 
-REQ_WAT = general_settings.get("failConnectionNumber", 100)
+REQ_WAT = general_settings.get("fail_connection_number", 100)
 
 
 @dataclass
@@ -36,10 +36,10 @@ class Store:
         default_factory=lambda: database.DBInterface()
     )
 
-    full_restart_interval: float = general_settings.get("softResetIntervalHours", 12)
-    full_frame_interval: float = general_settings.get("publishAllIntervalHours", 4)
+    full_restart_interval: float = general_settings.get("soft_reset_interval_hours", 12)
+    full_frame_interval: float = general_settings.get("publish_all_interval_hours", 4)
     cov_poll_interval: float = general_settings.get(
-        "publishInvervalSeconds", 30
+        "publish_inverval_seconds", 30
     )  # minimum seconds between publishes
 
     last_full_restart: float = field(default=0.0)
