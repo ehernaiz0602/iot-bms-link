@@ -117,7 +117,11 @@ class IoTWatchdog:
                 elif (
                     (self.number_retries > 10)
                     and (self.has_been_offline)
-                    and (now - self.time_down > 1800)
+                    and (
+                        now - self.time_down
+                        > general_settings.get("allowable_azure_downtime_minutes", 60)
+                        * 60
+                    )
                     and (not success_state)
                 ):
                     self.state = 3
@@ -185,7 +189,7 @@ class IoTDevice:
                 f"Could not initialize edge device. Check azure settings file: {e}"
             )
         try:
-            self.sas_ttl: int = int(azure_settings.get("sas_ttl", 90) * 24 * 60 * 60)
+            self.sas_ttl: int = int(azure_settings.get("sas_ttl", 90)) * 24 * 60 * 60
         except:
             logger.warning(f"sas ttl setting is not valid. Defaulting to 90 days")
             self.sas_ttl = 90 * 24 * 60 * 60
@@ -214,6 +218,11 @@ class IoTDevice:
             self.hostname = registration_result.registration_state.assigned_hub
             self.device_id = registration_result.registration_state.device_id
             logger.info(f"Provisioned device {self.device_id}")
+
+            if os.path.exists(core.CERTIFICATE):
+                os.remove(core.CERTIFICATE)
+                logger.debug(f"Removing certificate file")
+
         except Exception as e:
             logger.warning(f"Could not provision device: {e}")
 

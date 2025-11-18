@@ -4,8 +4,9 @@ import core
 from store import store
 import json
 import os
+from datetime import datetime
 
-__version__: str = "v0.7.0"
+__version__: str = "v0.8.0"
 __author__: str = "Henry West <hernaizhenry@gmail.com>"
 
 logger = logging.getLogger(__name__)
@@ -18,16 +19,13 @@ def main() -> None:
 
     logger.info(f"Starting version {__version__}")
 
-    # If err files enabled, write txt file with version in it.
-    with open(core.GENERAL_SETTINGS, "r") as f:
-        general_settings: dict[str, str | int | bool] = json.load(f)
-
-    if general_settings.get("useErrFiles", False):
-        with open("version.txt", "w+") as f:
-            try:
-                _ = f.write(f"Version {__version__}")
-            except Exception as e:
-                logger.error(f"Cannot write version file: {e}")
+    with open("version.txt", "w+") as f:
+        try:
+            _ = f.write(
+                f"Version {__version__} - started at {datetime.now().isoformat()}"
+            )
+        except Exception as e:
+            logger.error(f"Cannot write version file: {e}")
 
     try:
         asyncio.run(store.mainloop())

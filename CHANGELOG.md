@@ -58,3 +58,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Changed Settings-General to standardize all configuration keys to use lowercase underscores
+
+---
+
+## [0.8.0] - 2025-11-18
+
+### Added
+
+- Ensure removal of pfx certificate after exporting from the Windows Certificate Store
+- Added individualized BMS.err files for assistance with monitoring as a service
+- version.txt is always created on startup, regardless of configuration settings
+- version.txt now also includes the time that the application was (re)started
+- Added configurable allowable time limit to azure connection being down after connecting at least once

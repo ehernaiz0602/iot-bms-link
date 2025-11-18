@@ -77,6 +77,7 @@ default_general = {
     "use_err_files": False,
     "write_iot_payload_to_local_file": False,
     "fail_connection_number": 100,
+    "allowable_azure_downtime_minutes": 60,
 }
 
 default_ip = {

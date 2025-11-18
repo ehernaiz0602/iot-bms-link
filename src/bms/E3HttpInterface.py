@@ -11,6 +11,7 @@ import aiohttp
 from aiohttp_socks import ProxyConnector
 import platform
 from typing import Optional
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,14 @@ class E3HttpInterface:
                     s.raise_for_status()
                     text = await s.text()
                     self.failed_requests = 0
+
+                    if os.path.exists(core.PARENT_DIRECTORY / f"{self.ip}_BMS.err"):
+                        logger.info(f"Removing {self.ip}_BMS.err")
+                        try:
+                            os.remove(core.PARENT_DIRECTORY / f"{self.ip}_BMS.err")
+                        except Exception as e:
+                            logger.error(f"Cannot delete {self.ip}_BMS.err file: {e}")
+
                     return json.loads(text)
                 except json.JSONDecodeError:
                     logger.error(f"Failed to decode JSON from request")
@@ -131,6 +140,19 @@ class E3HttpInterface:
                 except Exception as e:
                     self.failed_requests += 1
                     logger.error(f"Unexpected error: {e}")
+
+                if general_settings.get(
+                    "use_err_files", False
+                ) and self.failed_requests > general_settings.get(
+                    f"fail_connection_number"
+                ):
+                    logger.warning(f"Writing {self.ip}_BMS.err")
+                    path_obj = core.PARENT_DIRECTORY / f"{self.ip}_BMS.err"
+                    try:
+                        path_obj.touch()
+                    except Exception as e:
+                        logger.error(f"Cannot touch {self.ip}_BMS.err file: {e}")
+
                 return None
 
         return await try_send()
@@ -152,6 +174,14 @@ class E3HttpInterface:
                 try:
                     s.raise_for_status()
                     text = await s.text()
+
+                    if os.path.exists(core.PARENT_DIRECTORY / f"{self.ip}_BMS.err"):
+                        logger.info(f"Removing {self.ip}_BMS.err")
+                        try:
+                            os.remove(core.PARENT_DIRECTORY / f"{self.ip}_BMS.err")
+                        except Exception as e:
+                            logger.error(f"Cannot delete {self.ip}_BMS.err file: {e}")
+
                     return json.loads(text)
                 except json.JSONDecodeError:
                     logger.error(f"Failed to decode JSON from request")
@@ -163,6 +193,19 @@ class E3HttpInterface:
                 except Exception as e:
                     self.failed_requests += 1
                     logger.error(f"Unexpected error: {e}")
+
+                if general_settings.get(
+                    "use_err_files", False
+                ) and self.failed_requests > general_settings.get(
+                    f"fail_connection_number"
+                ):
+                    logger.warning(f"Writing {self.ip}_BMS.err")
+                    path_obj = core.PARENT_DIRECTORY / f"{self.ip}_BMS.err"
+                    try:
+                        path_obj.touch()
+                    except Exception as e:
+                        logger.error(f"Cannot touch {self.ip}_BMS.err file: {e}")
+
                 return None
 
         return await try_send()

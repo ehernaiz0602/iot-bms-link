@@ -13,6 +13,7 @@ import aiohttp
 from aiohttp_socks import ProxyConnector
 import platform
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,31 @@ def process_command(func):
             response_text = await send_request(connector, timeout)
             logger.debug(f"Response received from {self.endpoint}")
             self.failed_requests = 0
+
+            if os.path.exists(core.PARENT_DIRECTORY / f"{self.ip}_BMS.err"):
+                logger.info(f"Removing {self.ip}_BMS.err")
+                try:
+                    os.remove(core.PARENT_DIRECTORY / f"{self.ip}_BMS.err")
+                except Exception as e:
+                    logger.error(f"Cannot delete {self.ip}_BMS.err file: {e}")
+
         except Exception as e:
             logger.warning(f"Final failure after {self.retries} retries: {e}")
             await asyncio.sleep(sleep)
             self.failed_requests += 1
+
+            if general_settings.get(
+                "use_err_files", False
+            ) and self.failed_requests > general_settings.get(
+                f"fail_connection_number"
+            ):
+                logger.warning(f"Writing {self.ip}_BMS.err")
+                path_obj = core.PARENT_DIRECTORY / f"{self.ip}_BMS.err"
+                try:
+                    path_obj.touch()
+                except Exception as e:
+                    logger.error(f"Cannot touch {self.ip}_BMS.err file: {e}")
+
             return {
                 "@action": action,
                 "@error": "Connection Error",
