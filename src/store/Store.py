@@ -152,15 +152,21 @@ class Store:
         except:
             logger.debug(f"No emerson3")
         try:
-            self.gather_and_send_emerson2(full_frame=full_frame)
+            await self.gather_and_send_emerson2(full_frame=full_frame)
         except:
             logger.debug(f"No emerson 2")
 
-    def gather_and_send_emerson2(self, full_frame=False):
-        # Temporary test to try test stability of emerson e2
-        # TODO: MAKE E2 ASYNC!!! Probably not necessary immediately because 1 panel sees all others
-        for panel in self.emerson2_panels:
-            panel.get_controllers()
+    async def gather_and_send_emerson2(self, full_frame=False):
+        if len(self.emerson2_panels) == 0:
+            return
+
+        panel = self.emerson2_panels[0]  # Only one controller is needed
+        if not panel.initialized:
+            panel.initialize()
+        panel.get_cell_statuses()
+        data = panel.get_data()
+        iot_data = await self.db_interface.fetch_cov_data(data, full_frame=full_frame)
+        await self.edge_device.send_message(iot_data)
 
     async def gather_and_send_danfoss(self, full_frame=False):
         """Gather and send data from Danfoss panels."""

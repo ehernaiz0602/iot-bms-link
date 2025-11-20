@@ -1,12 +1,10 @@
 import asyncio
 import logging
-import core
 from store import store
-import json
 import os
 from datetime import datetime
 
-__version__: str = "v0.8.0"
+__version__: str = "v0.9.0"
 __author__: str = "Henry West <hernaizhenry@gmail.com>"
 
 logger = logging.getLogger(__name__)

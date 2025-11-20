@@ -1,6 +1,6 @@
 [project]
 name = "iot-bms-link"
-version = "0.8.0"
+version = "0.9.0"
 description = "A cloud-bms gateway driver"
 authors = [
     {name = "Henry West",email = "hernaizhenry@gmail.com"}
@@ -101,7 +101,8 @@ dependencies = [
     "virtualenv (==20.35.3)",
     "xmltodict (==1.0.2)",
     "yarl (==1.22.0)",
-    "zstandard (==0.25.0)"
+    "zstandard (==0.25.0)",
+    "tqdm (>=4.67.1,<5.0.0)"
 ]
 
 

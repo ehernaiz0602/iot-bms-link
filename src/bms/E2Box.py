@@ -1,29 +1,64 @@
+from __future__ import annotations
 import logging
 from typing import override
 from .E2SocketInterface import E2SocketInterface
 from dataclasses import dataclass, field
+from rich.tree import Tree
+from rich import print as rprint
+import struct
+from .E2Properties import E2_PROPERTIES
 
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class Application:
-    name: str
+from dataclasses import dataclass, field
 
 
 @dataclass
 class Cell:
     name: str
-    celltype: str
-    applications: list[Application] = field(default_factory=list, repr=False)
+    parent_controller: Controller
+    parent_cell_type: CellType
+    cell_address: str
+    data: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class CellType:
+    name: str
+    parent_controller: Controller
+    cells: dict[str, Cell] = field(default_factory=dict)
+
+    def add_cell(self, data: dict):
+        cell_name = data.get("cell_name")
+        if not cell_name:
+            return  # skip invalid
+        if cell_name not in self.cells:
+            self.cells[cell_name] = Cell(
+                name=cell_name,
+                parent_controller=self.parent_controller,
+                parent_cell_type=self,
+                cell_address=data.get("cell_address", "invalid"),
+            )
 
 
 @dataclass
 class Controller:
     name: str
     controller_number: int
-    cells: list[Cell] = field(default_factory=list, repr=False)
+    cell_types: dict[str, CellType] = field(default_factory=dict)
+
+    def add_celltype(self, data: dict):
+        cell_type_name = data.get("cell_type")
+        if not cell_type_name:
+            return  # skip invalid
+        if cell_type_name not in self.cell_types:
+            self.cell_types[cell_type_name] = CellType(
+                name=cell_type_name,
+                parent_controller=self,
+            )
+        self.cell_types[cell_type_name].add_cell(data)
 
 
 class E2Box:
@@ -32,6 +67,7 @@ class E2Box:
         self.name: str = name
         self.socket_interface: E2SocketInterface = E2SocketInterface(ip)
         self.controllers: list[Controller] = []
+        self.initialized: bool = False
 
     def get_controllers(self):
         logger.info(f"{self.name} is getting controllers")
@@ -59,50 +95,6 @@ class E2Box:
         else:
             logger.error(f"{self.name} could not update controller list")
 
-    def split_by_ascii_delimiters_keep(
-        self, data_struct: list[tuple[str, int]], delimiters: set[str]
-    ) -> list[list[tuple[str, int]]]:
-        """
-        Split a list of (ascii_char, byte) tuples by multi-character delimiters in the ASCII view.
-        The delimiters are *included* at the start of each group.
-        """
-        ascii_view = "".join(ch for ch, _ in data_struct)
-        result = []
-
-        # find all delimiter positions
-        positions = []
-        for d in delimiters:
-            start = 0
-            while True:
-                idx = ascii_view.find(d, start)
-                if idx == -1:
-                    break
-                positions.append((idx, d))
-                start = idx + len(d)
-
-        # sort delimiters by position
-        positions.sort(key=lambda x: x[0])
-
-        if not positions:
-            return [data_struct]
-
-        # handle text before the first delimiter (if any)
-        first_pos, first_delim = positions[0]
-        if first_pos > 0:
-            pre = data_struct[:first_pos]
-            if pre:
-                result.append(pre)
-
-        # now chunk from delimiter to next delimiter
-        for i, (pos, delim) in enumerate(positions):
-            start = pos
-            end = positions[i + 1][0] if i + 1 < len(positions) else len(ascii_view)
-            group = data_struct[start:end]
-            if group:
-                result.append(group)
-
-        return result
-
     def get_cells_and_apps(self, controller: Controller):
 
         if self.controllers == []:
@@ -110,50 +102,114 @@ class E2Box:
 
         result = self.socket_interface.get_cells_and_apps(controller.controller_number)
 
-        if isinstance(result, bytes):
-            logger.info(f"{self.name} is updating cells and apps")
+        if not isinstance(result, bytes):
+            return []
 
-            delimiters = {
-                "Physical DO",
-                "Physical DI",
-                "Physical AI",
-                "Analog Combiner",
-                "Flexible Combine",
-                "Log Group",
-                "Area Controller",
-                "Time Schedule",
-                "Power Monitor",
-                "Device Status",
-                "Global Data",
-                "Sensor AV",
-                "Sensor DV",
-                "Loop/Seq Ctrl",
-                "Conversion Cell",
-                "Condenser",
-                "Circuits (Std)",
-                "Enhanced Suct",
-                "16 Analog Inputs",
-                "8 Relay Outputs",
-                "Note Pad",
-                "ALARM SETUP",
-                "User Access",
-                "General Config",
-                "Time and Date",
-                "Network Setup",
-                "NV Handler",
-                "Remote Dial",
-                "Advisory Log",
-                "Access Log",
-                "Override Log",
-                "App Defaults",
-            }
+        logger.info(f"{self.name} is updating {controller.name}'s cells and apps")
 
-            ascii_data = "".join(chr(b) if 32 <= b < 127 else f"`" for b in result)
-            data_struct = list(zip(ascii_data, result))
+        delimiter = bytes.fromhex("02 00 00 00 01 00 00 00")
+        valid_prefix = bytes.fromhex("01 00 00 00")
 
-            groups = self.split_by_ascii_delimiters_keep(data_struct, delimiters)
-            groups = groups[1:]
-            return groups
+        chunks = result.split(delimiter)
+        chunked = [chunk for chunk in chunks if chunk.startswith(valid_prefix)]
+
+        for data in chunked:
+            chunk_delimiter = bytes.fromhex("00 00 00")
+            data_chunks = data.split(chunk_delimiter)
+
+            if len(data_chunks) == 6:
+                parsed_data = {
+                    "a": data_chunks[1],
+                    "cell_type": data_chunks[2],
+                    "b": data_chunks[3],
+                    "c": data_chunks[4],
+                    "cell_name": data_chunks[5][:-9],
+                    "cell_address": data_chunks[5][-6:-2],
+                    "d": data_chunks[5][:3],
+                }
+
+                parsed_data = {
+                    **parsed_data,
+                    "cell_type": parsed_data["cell_type"].decode(
+                        "utf-8", errors="ignore"
+                    ),
+                    "cell_name": parsed_data["cell_name"].decode(
+                        "utf-8", errors="ignore"
+                    ),
+                    "cell_address": " ".join(
+                        f"{b:02X}" for b in parsed_data["cell_address"]
+                    ),
+                }
+                controller.add_celltype(parsed_data)
+
+    def get_data(self) -> list[dict]:
+        data: list[dict] = []
+        for controller in self.controllers:
+            for celltype in controller.cell_types.values():
+                for cell in celltype.cells.values():
+                    record = {
+                        "@nodetype": "E2",
+                        "@node": controller.name,
+                        "@mod": celltype.name,
+                        "@point": cell.name,
+                        "ip": self.ip,
+                        **cell.data,
+                    }
+                    data.append(record)
+        return data
+
+    def get_cell_statuses(self):
+        all_cells = [
+            cell
+            for controller in self.controllers
+            for cell_type in controller.cell_types.values()
+            for cell in cell_type.cells.values()
+        ]
+
+        for cell in all_cells:
+            self.get_cell_status(cell)
+
+    def get_cell_status(self, cell: Cell):
+        for k, v in E2_PROPERTIES.get(cell.parent_cell_type.name, {}).items():
+            logger.info(f"Getting {v} for cell {cell.name}")
+            resp = self.socket_interface.get_cell_status(
+                cell.parent_controller.controller_number,
+                cell.cell_address,
+                [k],
+            )
+            try:
+                res = struct.unpack("<f", resp[61:65])
+                res_round = round(res[0], 5)
+                cell.data[v] = res_round
+                logger.debug(f"result: {res_round}")
+            except Exception as e:
+                logger.error(f"Could not read data: {e}")
+
+    def initialize(self):
+        logger.info(f"Initializing E2 controllers")
+        self.get_controllers()
+        for controller in self.controllers:
+            self.get_cells_and_apps(controller)
+        self.initialized = True
+
+    def print_hierarchy(self):
+        root = Tree(f"[bold]{self.name}[/bold] @ {self.ip}")
+
+        for controller in self.controllers:
+            c_branch = root.add(
+                f"[magenta]Controller[/magenta] {controller.controller_number} ({controller.name})"
+            )
+
+            for ct_name, ct in controller.cell_types.items():
+                ct_branch = c_branch.add(f"[cyan]CellType[/cyan] {ct_name}")
+
+                for cell_name, cell in ct.cells.items():
+                    cell_branch = ct_branch.add(f"[green]Cell[/green] {cell_name}")
+                    cell_branch.add(f"[yellow]Address[/yellow]: {cell.cell_address}")
+                    for k, v in cell.data.items():
+                        cell_branch.add(f"{k}: {v}")
+
+        rprint(root)
 
     @override
     def __repr__(self) -> str:

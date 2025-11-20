@@ -65,16 +65,16 @@ default_azure = {
 }
 
 default_general = {
-    "logging_level": "debug",
-    "log_file_max_size_mb": 2,
-    "log_file_backup_count": 3,
-    "http_request_delay": 2,
+    "logging_level": "info",
+    "log_file_max_size_mb": 250,
+    "log_file_backup_count": 4,
+    "http_request_delay": 5,
     "http_timeout_delay": 3,
     "http_retry_count": 5,
     "publish_interval_seconds": 30,
     "publish_all_interval_hours": 4,
     "soft_reset_interval_hours": 12,
-    "use_err_files": False,
+    "use_err_files": True,
     "write_iot_payload_to_local_file": False,
     "fail_connection_number": 100,
     "allowable_azure_downtime_minutes": 60,

@@ -12,7 +12,8 @@ import time
 
 logger = logging.getLogger(__name__)
 
-CPCR: str = "43 50 43 52 00 01 19 00 00 00"
+CPCR: str = f"43 50 43 52 00 01 19 00 00 00"
+CONTROLLER_SELECT: str = f"01 00 00 09 00 00 00"
 
 with open(core.GENERAL_SETTINGS, "r") as f:
     general_settings: dict[str, int | str] = json.load(f)
@@ -32,6 +33,7 @@ def socket_retry(method: Callable[..., bytes]) -> bytes | None:
         def attempt():
             return method(self, *args, **kwargs)
 
+        time.sleep(0.3)  # Slow down the connection a bit
         return retryer(attempt) if self.socket_open else None
 
     return wrapper
@@ -109,7 +111,7 @@ class E2SocketInterface:
     @socket_retry
     def get_alarms(self, controller_number: int):
         command = bytes.fromhex(
-            f"{CPCR} 2e 00 00 00 15 00 00 00 {controller_number:02X} 01 00 00 09 00 00 00 01 00 00 00 37 00 00 00 08 00 00 00 01 00 00 00 02 00 00 00"
+            f"{CPCR} 2e 00 00 00 15 00 00 00 {controller_number:02X} {CONTROLLER_SELECT} 01 00 00 00 37 00 00 00 08 00 00 00 01 00 00 00 02 00 00 00"
         )
         self.socket.sendall(command)
         response: bytes = self.recv_all()
@@ -120,12 +122,37 @@ class E2SocketInterface:
 
     @socket_retry
     def get_cells_and_apps(self, controller_number: int):
+        logger.debug(f"Sending get celltypes and cells to controller")
         command = bytes.fromhex(
-            f"{CPCR} 2e 00 00 00 15 00 00 00 {controller_number:02X} 01 00 00 09 00 00 00 01 00 00 00 20 00 00 00 08 00 00 00 02 00 00 00 01 00 00 00"
+            f"{CPCR} 2e 00 00 00 15 00 00 00 {controller_number:02X} {CONTROLLER_SELECT} 01 00 00 00 20 00 00 00 08 00 00 00 02 00 00 00 01 00 00 00"
         )
         self.socket.sendall(command)
         response: bytes = self.recv_all()
         if not response:
             self.socket_open = False
+            raise ValueError("Invalid response received")
+        return response
+
+    @socket_retry
+    def get_cell_status(
+        self, controller_number: int, cell_tag: str, properties: list[int]
+    ):
+        logger.debug(f"Reading property {properties[0]} at address {cell_tag}")
+
+        def encode_property_index(p: int) -> str:
+            return f"{p & 0xFF:02X} {(p >> 8) & 0xFF:02X}"
+
+        query = [
+            f"01 00 00 00 {cell_tag} 04 {encode_property_index(p)}" for p in properties
+        ]
+        query_string = " ".join(query)
+
+        command = bytes.fromhex(
+            f"{CPCR} 39 00 00 00 20 00 00 00 {controller_number:02X} {CONTROLLER_SELECT} "
+            f"01 00 00 00 41 00 00 00 13 00 00 00 01 00 00 00 {len(properties):02X} 00 00 00 {query_string}"
+        )
+        self.socket.sendall(command)
+        response: bytes = self.socket.recv(4096)
+        if not response:
             raise ValueError("Invalid response received")
         return response

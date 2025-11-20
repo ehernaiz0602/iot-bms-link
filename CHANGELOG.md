@@ -70,3 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - version.txt is always created on startup, regardless of configuration settings
 - version.txt now also includes the time that the application was (re)started
 - Added configurable allowable time limit to azure connection being down after connecting at least once
+
+---
+
+## [0.9.0] - 2025-11-19
+
+### Added
+
+- Emerson E2 IoT Integration
