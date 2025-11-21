@@ -78,3 +78,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Emerson E2 IoT Integration
+
+---
+
+## [0.9.1] - 2025-11-21
+
+### Added
+
+- Additional Emerson E2 points
