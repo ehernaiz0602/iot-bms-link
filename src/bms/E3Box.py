@@ -23,9 +23,9 @@ class E3Box:
             for a in g.applications.values():
                 if a.alarms:
                     alarm_record = {
+                        "@nodetype": "E3",
                         "@node": g.name,
                         "@mod": a.iid,
-                        "@nodetype": "novalue",
                         "ip": self.unit_info.get("ip"),
                         "appname": a.appname,
                         "apptype": a.apptype,
@@ -39,6 +39,7 @@ class E3Box:
 
                 for p in a.pids.values():
                     pid_record = {
+                        "@nodetype": "E3",
                         "@node": g.name,
                         "@mod": a.iid,
                         "@point": p.pid,

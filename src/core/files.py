@@ -16,7 +16,8 @@ def get_root_directory():
 PARENT_DIRECTORY = get_root_directory()
 
 # Folder structure
-CONFIG_DIRECTORY = PARENT_DIRECTORY / "config"
+# CONFIG_DIRECTORY = PARENT_DIRECTORY / "config"
+CONFIG_DIRECTORY = PARENT_DIRECTORY
 DATA_DIRECTORY = PARENT_DIRECTORY / "data"
 LOG_DIRECTORY = PARENT_DIRECTORY / "logs"
 
@@ -28,6 +29,7 @@ GENERAL_SETTINGS = CONFIG_DIRECTORY / "Settings-General.json"
 # data files
 DATABASE = DATA_DIRECTORY / "database.db"
 CERTIFICATE = DATA_DIRECTORY / "certificate.pfx"
+LOCAL_MESSAGES = DATA_DIRECTORY / "local_messages.jsonl"
 
 # log files
 LOG = LOG_DIRECTORY / "log.jsonl"
@@ -50,6 +52,7 @@ FILES = {
     "certificate": CERTIFICATE,
     "log": LOG,
     "iotpayloads": IOTPAYLOADS,
+    "local_messages": LOCAL_MESSAGES,
 }
 
 # default files
@@ -78,6 +81,7 @@ default_general = {
     "write_iot_payload_to_local_file": False,
     "fail_connection_number": 100,
     "allowable_azure_downtime_minutes": 60,
+    "send_message_to_local_file_only": False,
 }
 
 default_ip = {

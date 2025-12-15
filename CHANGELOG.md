@@ -86,3 +86,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Additional Emerson E2 points
+
+---
+
+## [0.10.0] - 2025-12-25
+
+### Fixed
+
+- Emerson E3 auto-normalization not working properly due to missing nodetype injection
+- Fixed a bug where Emerson E2 socket handling was not properly working, leading to driver zombification
+
+### Added
+
+- Ability to send message to local sink (data/local_messages.jsonl) instead of Azure IoTHub for testing
+- More complete README.md file
+- Better pfx export behavior to handle edge cases where multiple certificates of the same name exists, grabbing the most recent valid one
+
+### Removed
+
+- config/ directory
+
+### Changed
+
+- The configuration files are now available directly in the root directory of the project/executable

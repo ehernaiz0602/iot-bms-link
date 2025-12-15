@@ -19,19 +19,31 @@ with open(core.GENERAL_SETTINGS, "r") as f:
     general_settings: dict[str, int | str] = json.load(f)
 
 
-def socket_retry(method: Callable[..., bytes]) -> bytes | None:
+def socket_retry(method: Callable[..., bytes]) -> Callable[..., bytes | None]:
     def wrapper(self, *args, **kwargs):
         if not self.socket_open:
+            self.connect()
+
+        def attempt():
+            return method(self, *args, **kwargs)
+
+        # hook to log each failure
+        def log_retry(retry_state):
+            exc = retry_state.outcome.exception()
+            logging.warning(
+                f"Retry {retry_state.attempt_number} failed: {exc.__class__.__name__}: {exc}"
+            )
+            logger.debug(f"Resetting the socket object just in case")
+            self.close()
+            time.sleep(1)
             self.connect()
 
         retryer = Retrying(
             stop=stop_after_attempt(self.retries),
             wait=wait_fixed(self.request_delay),
             reraise=True,
+            before_sleep=log_retry,  # called before sleeping after a failed attempt
         )
-
-        def attempt():
-            return method(self, *args, **kwargs)
 
         time.sleep(0.3)  # Slow down the connection a bit
         return retryer(attempt) if self.socket_open else None
@@ -49,15 +61,22 @@ class E2SocketInterface:
         self.request_delay: int = general_settings.get(
             "http_request_delay", 3
         )  # Not using HTTP but good enough descriptor
+        self.socket_open: bool = False
         s = socks.socksocket()
         if platform.system() == "Linux":
             s.set_proxy(socks.SOCKS5, "127.0.0.1", 1080)
         s.settimeout(5)
         self.socket: socks.socksocket = s
-        self.socket_open: bool = False
         atexit.register(self.close)
 
     def connect(self):
+        s = socks.socksocket()
+        if platform.system() == "Linux":
+            s.set_proxy(socks.SOCKS5, "127.0.0.1", 1080)
+        s.settimeout(5)
+
+        self.socket: socks.socksocket = s
+
         try:
             self.socket.connect((self.ip, self.port))
             self.socket_open = True
@@ -69,6 +88,7 @@ class E2SocketInterface:
         if self.socket_open:
             logger.info(f"Closing E2 communication socket")
             self.socket.close()
+        self.socket_open = False
 
     def recv_all(self):
         data = b""

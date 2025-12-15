@@ -44,6 +44,7 @@ class Store:
 
     last_full_restart: float = field(default=0.0)
     last_full_frame: float = field(default=0.0)
+    failure_flag: int = field(default=0, repr=False)
 
     def add_danfoss(self):
         self.danfoss_panels = []
@@ -110,6 +111,7 @@ class Store:
                     self.last_full_frame = time.monotonic()
 
                 else:
+                    logger.debug(f"Sending COV frames")
                     await self.send_cov_frames(full_frame=False)
 
             except Exception as e:
@@ -137,7 +139,7 @@ class Store:
         except:
             logger.debug(f"No emerson 3")
         try:
-            self.gather_and_send_emerson2(full_frame=True)
+            await self.gather_and_send_emerson2(full_frame=True)
         except:
             logger.debug(f"No emerson 2")
 
@@ -145,22 +147,35 @@ class Store:
         """Send only CoV (change-of-value) data."""
         try:
             await self.gather_and_send_danfoss(full_frame=full_frame)
+            self.failure_flag = 0
         except:
             logger.debug(f"No danfoss")
+            self.failure_flag += 1
         try:
             await self.gather_and_send_emerson3(full_frame=full_frame)
+            self.failure_flag = 0
         except:
             logger.debug(f"No emerson3")
+            self.failure_flag += 1
         try:
             await self.gather_and_send_emerson2(full_frame=full_frame)
+            self.failure_flag = 0
         except:
             logger.debug(f"No emerson 2")
+            self.failure_flag += 1
+
+        if self.failure_flag == 21:
+            logger.critical(
+                f"Fatal error: No BMS systems working. Check logs for details"
+            )
+            await asyncio.sleep(3)
+            os._exit(1)
 
     async def gather_and_send_emerson2(self, full_frame=False):
         if len(self.emerson2_panels) == 0:
             return
 
-        panel = self.emerson2_panels[0]  # Only one controller is needed
+        panel = self.emerson2_panels[-1]  # Only one controller is needed
         if not panel.initialized:
             panel.initialize()
         panel.get_cell_statuses()

@@ -341,7 +341,13 @@ class IoTDevice:
                             with open(core.IOTPAYLOADS, "w+") as f:
                                 json.dump(batch, f, indent=2)
                             logger.info("Overwriting last message to IOTPAYLOAD.json")
-                        await self.device_client.send_message(message)
+                        if not general_settings.get(
+                            "send_message_to_local_file_only", False
+                        ):
+                            await self.device_client.send_message(message)
+                        else:
+                            with open(core.LOCAL_MESSAGES, "a", encoding="utf-8") as f:
+                                f.write(json.dumps(batch) + "\n")
                         logger.info(
                             f"Sent batch of {len(batch)} device chunks, size {message.get_size()} bytes"
                         )
@@ -361,7 +367,12 @@ class IoTDevice:
                     with open(core.IOTPAYLOADS, "w+") as f:
                         json.dump(batch, f, indent=2)
                     logger.info("Overwriting last message to IOTPAYLOAD.json")
-                await self.device_client.send_message(message)
+
+                if not general_settings.get("send_message_to_local_file_only", False):
+                    await self.device_client.send_message(message)
+                else:
+                    with open(core.LOCAL_MESSAGES, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(batch) + "\n")
                 logger.info(
                     f"Sent final batch of {len(batch)} device chunks, size {message.get_size()} bytes"
                 )
