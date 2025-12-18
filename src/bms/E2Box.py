@@ -7,7 +7,6 @@ from rich.tree import Tree
 from rich import print as rprint
 import struct
 from .E2Properties import E2_PROPERTIES
-from tqdm import tqdm
 
 
 logger = logging.getLogger(__name__)
@@ -167,7 +166,7 @@ class E2Box:
             for cell in cell_type.cells.values()
         ]
 
-        for cell in tqdm(all_cells):
+        for cell in all_cells:
             self.get_cell_status(cell)
 
     def get_cell_status(self, cell: Cell):
