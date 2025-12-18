@@ -1,6 +1,6 @@
 [project]
 name = "iot-bms-link"
-version = "0.10.0"
+version = "0.11.0"
 description = "A cloud-bms gateway driver"
 authors = [
     {name = "Henry West",email = "hernaizhenry@gmail.com"}

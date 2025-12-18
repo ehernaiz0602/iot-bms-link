@@ -89,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.10.0] - 2025-12-25
+## [0.10.0] - 2025-12-15
 
 ### Fixed
 
@@ -109,3 +109,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - The configuration files are now available directly in the root directory of the project/executable
+
+---
+
+## [0.11.0] - 2025-12-18
+
+### Added
+
+- Added configurable parameter to set delays between TCP requests in milliseconds for E2 controllers.
+
+### Changed
+
+- Massively reduced number of likely extraneous points to gather from E2 controllers, increasing loop time speed
+- E2 socket now disconnects and reconnects between every request, to more accurately emulate UltraSite
+- Settings-General now writes to IOTPAYLOAD by default on a new file generation

@@ -78,10 +78,11 @@ default_general = {
     "publish_all_interval_hours": 4,
     "soft_reset_interval_hours": 12,
     "use_err_files": True,
-    "write_iot_payload_to_local_file": False,
+    "write_iot_payload_to_local_file": True,
     "fail_connection_number": 100,
     "allowable_azure_downtime_minutes": 60,
     "send_message_to_local_file_only": False,
+    "e2_tcp_delay_milliseconds": 1,
 }
 
 default_ip = {

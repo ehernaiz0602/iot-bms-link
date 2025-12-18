@@ -1,4 +1,3 @@
-import asyncio
 from .DanfossXMLInterface import DanfossXMLInterface
 from core import aobject
 from rich.tree import Tree
@@ -121,7 +120,7 @@ class DanfossBox:
                 )
             logger.info(f"{self.name} Finished HVACs discovery")
         else:
-            logger.warning(f"Could not discover HVACs")
+            logger.warning("Could not discover HVACs")
 
     async def discover_lighting(self):
         logger.info(f"{self.name} Starting lighting discovery")
@@ -599,7 +598,7 @@ class Point(aobject):
 
     async def get_condenser_data(self):
         if x := self.meta.get("@rack_id"):
-            logger.debug(f"Checking condenser mappings")
+            logger.debug("Checking condenser mappings")
             if x not in self.parent_dbox.read_condenser.keys():
                 self.parent_dbox.read_condenser[x] = (
                     await self.parent_dbox.xml_interface.read_condenser(x)
@@ -610,7 +609,7 @@ class Point(aobject):
 
     async def get_suction_group_data(self):
         if (y := self.meta.get("@suction_id")) and (x := self.meta.get("@rack_id")):
-            logger.debug(f"Checking suction group mappings")
+            logger.debug("Checking suction group mappings")
             if (x, y) not in self.parent_dbox.read_suction_group.keys():
                 self.parent_dbox.read_suction_group[(x, y)] = (
                     await self.parent_dbox.xml_interface.read_suction_group(x, y)
@@ -622,7 +621,7 @@ class Point(aobject):
                         "num_circuits", None
                     )
                 ) is not None:
-                    logger.info(f"Discovering circuits")
+                    logger.info("Discovering circuits")
                     try:
                         for i in range(int(nc)):
                             circ = await self.parent_dbox.xml_interface.read_circuit(

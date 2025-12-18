@@ -35,7 +35,6 @@ def socket_retry(method: Callable[..., bytes]) -> Callable[..., bytes | None]:
             )
             logger.debug(f"Resetting the socket object just in case")
             self.close()
-            time.sleep(1)
             self.connect()
 
         retryer = Retrying(
@@ -45,8 +44,21 @@ def socket_retry(method: Callable[..., bytes]) -> Callable[..., bytes | None]:
             before_sleep=log_retry,  # called before sleeping after a failed attempt
         )
 
-        time.sleep(0.3)  # Slow down the connection a bit
-        return retryer(attempt) if self.socket_open else None
+        try:
+            tcp_delay = int(general_settings.get("e2_tcp_delay_milliseconds", 300))
+        except:
+            tcp_delay = 300
+
+        tcp_delay = tcp_delay / 1000
+
+        result = retryer(attempt) if self.socket_open else None
+
+        self.close()
+
+        if tcp_delay >= 0:
+            time.sleep(tcp_delay)
+
+        return result
 
     return wrapper
 

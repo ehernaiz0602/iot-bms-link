@@ -7,6 +7,7 @@ from rich.tree import Tree
 from rich import print as rprint
 import struct
 from .E2Properties import E2_PROPERTIES
+from tqdm import tqdm
 
 
 logger = logging.getLogger(__name__)
@@ -166,11 +167,15 @@ class E2Box:
             for cell in cell_type.cells.values()
         ]
 
-        for cell in all_cells:
+        for cell in tqdm(all_cells):
             self.get_cell_status(cell)
 
     def get_cell_status(self, cell: Cell):
         for k, v in E2_PROPERTIES.get(cell.parent_cell_type.name, {}).items():
+            if k in cell.data.keys() and str(cell.data[k])[0:4] == "-858":
+                logger.debug(f"Skipping {k}, not active")
+                continue
+
             logger.info(f"Getting {v} for cell {cell.name}")
             resp = self.socket_interface.get_cell_status(
                 cell.parent_controller.controller_number,
