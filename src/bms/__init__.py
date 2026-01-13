@@ -4,3 +4,5 @@ from .E3HttpInterface import E3HttpInterface
 from .E3Box import E3Box
 from .E2SocketInterface import E2SocketInterface
 from .E2Box import E2Box
+from .E2HttpInterface import E2HttpInterface
+from .E2HttpBox import E2HttpBox

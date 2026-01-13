@@ -28,6 +28,7 @@ class Store:
 
     danfoss_panels: list = field(default_factory=list)
     emerson2_panels: list = field(default_factory=list)
+    emerson2http_panels: list = field(default_factory=list)
     emerson3_panels: list = field(default_factory=list)
     edge_device: "azure_connection.IoTDevice" = field(
         default_factory=lambda: azure_connection.IoTDevice()
@@ -76,6 +77,16 @@ class Store:
                 if panel_ip:
                     self.emerson2_panels.append(bms.E2Box(panel_ip, panel_name))
 
+    def add_emerson2http(self):
+        self.emerson2http_panels = []
+        emerson_config = ip_settings.get("emerson_e2_http", [])
+        if len(emerson_config) > 0:
+            for panel in emerson_config:
+                panel_ip = panel.get("ip", "")
+                panel_name = panel.get("name", "")
+                if panel_ip:
+                    self.emerson2http_panels.append(bms.E2HttpBox(panel_ip, panel_name))
+
     async def mainloop(self):
         """Main execution loop: full restart every 12 hours, CoV updates otherwise."""
         await self.edge_device.connect()
@@ -87,6 +98,7 @@ class Store:
         self.add_danfoss()
         self.add_emerson3()
         self.add_emerson2()
+        self.add_emerson2http()
         self.last_full_restart = time.monotonic()
         self.last_full_frame = time.monotonic()
 
@@ -129,39 +141,58 @@ class Store:
         self.add_danfoss()
         self.add_emerson3()
         self.add_emerson2()
+        self.add_emerson2http()
 
         try:
-            await self.gather_and_send_danfoss(full_frame=True)
+            if len(self.danfoss_panels) > 0:
+                await self.gather_and_send_danfoss(full_frame=True)
         except:
             logger.debug(f"No danfoss")
         try:
-            await self.gather_and_send_emerson3(full_frame=True)
+            if len(self.emerson3_panels) > 0:
+                await self.gather_and_send_emerson3(full_frame=True)
         except:
             logger.debug(f"No emerson 3")
         try:
-            await self.gather_and_send_emerson2(full_frame=True)
+            if len(self.emerson2_panels) > 0:
+                await self.gather_and_send_emerson2(full_frame=True)
         except:
-            logger.debug(f"No emerson 2")
+            logger.debug(f"No emerson 2 tcp")
+        try:
+            if len(self.emerson2http_panels) > 0:
+                await self.gather_and_send_emerson2http(full_frame=True)
+        except:
+            logger.debug(f"No emerson 2 http")
 
     async def send_cov_frames(self, full_frame=False):
         """Send only CoV (change-of-value) data."""
         try:
-            await self.gather_and_send_danfoss(full_frame=full_frame)
-            self.failure_flag = 0
+            if len(self.danfoss_panels) > 0:
+                await self.gather_and_send_danfoss(full_frame=full_frame)
+                self.failure_flag = 0
         except:
             logger.debug(f"No danfoss")
             self.failure_flag += 1
         try:
-            await self.gather_and_send_emerson3(full_frame=full_frame)
-            self.failure_flag = 0
+            if len(self.emerson3_panels) > 0:
+                await self.gather_and_send_emerson3(full_frame=full_frame)
+                self.failure_flag = 0
         except:
             logger.debug(f"No emerson3")
             self.failure_flag += 1
         try:
-            await self.gather_and_send_emerson2(full_frame=full_frame)
-            self.failure_flag = 0
+            if len(self.emerson2_panels) > 0:
+                await self.gather_and_send_emerson2(full_frame=full_frame)
+                self.failure_flag = 0
         except:
-            logger.debug(f"No emerson 2")
+            logger.debug(f"No emerson 2 tcp")
+            self.failure_flag += 1
+        try:
+            if len(self.emerson2http_panels) > 0:
+                await self.gather_and_send_emerson2http(full_frame=full_frame)
+                self.failure_flag = 0
+        except Exception as e:
+            logger.error(f"{e}")
             self.failure_flag += 1
 
         if self.failure_flag == 21:
@@ -179,6 +210,18 @@ class Store:
         if not panel.initialized:
             panel.initialize()
         panel.get_cell_statuses()
+        data = panel.get_data()
+        iot_data = await self.db_interface.fetch_cov_data(data, full_frame=full_frame)
+        await self.edge_device.send_message(iot_data)
+
+    async def gather_and_send_emerson2http(self, full_frame=False):
+        if len(self.emerson2http_panels) == 0:
+            return
+
+        panel = self.emerson2http_panels[-1]  # Only one controller is needed
+        if not panel.initialized:
+            await panel.initialize()
+        await panel.poll_all()
         data = panel.get_data()
         iot_data = await self.db_interface.fetch_cov_data(data, full_frame=full_frame)
         await self.edge_device.send_message(iot_data)

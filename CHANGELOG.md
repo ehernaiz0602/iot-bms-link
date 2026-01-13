@@ -123,3 +123,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Massively reduced number of likely extraneous points to gather from E2 controllers, increasing loop time speed
 - E2 socket now disconnects and reconnects between every request, to more accurately emulate UltraSite
 - Settings-General now writes to IOTPAYLOAD by default on a new file generation
+
+---
+
+## [0.12.0] - 2026-01-13
+
+### Added
+
+- Added emerson E2 http polling method
+
+### Changed
+
+- E3 now closes sessions between every request

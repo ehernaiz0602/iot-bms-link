@@ -106,6 +106,16 @@ default_ip = {
             "name": "panel_02",
         },
     ],
+    "emerson_e2_http": [
+        {
+            "ip": "1.1.1.1",
+            "name": "panel_01",
+        },
+        {
+            "ip": "2.2.2.2",
+            "name": "panel_02",
+        },
+    ],
     "emerson_e3": [
         {
             "ip": "1.1.1.1",

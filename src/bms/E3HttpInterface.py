@@ -21,6 +21,8 @@ with open(core.GENERAL_SETTINGS, "r") as f:
 
 def verify_session(func):
     async def wrapper(self, *args, **kwargs):
+        await self._close_session()
+
         if self.session is None or not self.session_id:
             await self._init_session()
 
