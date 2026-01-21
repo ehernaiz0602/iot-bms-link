@@ -6,6 +6,7 @@ from aiohttp_socks import ProxyConnector
 import platform
 import core
 import pandas as pd
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -1673,6 +1674,7 @@ class E2HttpInterface:
         self.retries = general_settings.get("http_retry_count", 3)
         self.failed_requests = 0
         self.http_request_delay = general_settings.get("http_request_delay", 3)
+        self.backoff = general_settings.get("fail_backoff_seconds", 3600)
 
         self.http_headers = {
             "Content-Type": "application/json",
@@ -1724,11 +1726,16 @@ class E2HttpInterface:
                         continue
 
                     try:
-                        res = json.loads(await resp.text())
+                        res = await resp.text()
+                        try:
+                            ret = json.loads(res)
+                        except:
+                            fixed = re.sub(r'(?<=[A-Za-z0-9])"(?=[A-Za-z0-9])', "", res)
+                            ret = json.loads(fixed)
                         self.failed_requests = 0
                         await self.close()
                         await asyncio.sleep(self.http_request_delay)
-                        return res
+                        return ret
                     except Exception as e:
                         logger.error(e)
                         return {}
@@ -1739,6 +1746,7 @@ class E2HttpInterface:
 
             except aiohttp.ClientError as e:
                 logger.error("E2 RPC client error on attempt %d: %s", attempt, e)
+                await asyncio.sleep(self.backoff)
                 await asyncio.sleep(self.http_request_delay)
 
             except Exception:
@@ -1786,4 +1794,13 @@ class E2HttpInterface:
         }
         if payload["params"] == [[]]:
             return {}
+        return await self._post_jsonrpc(payload)
+
+    async def get_alarm_list(self, controller: str):
+        logger.debug(f"Fetching alarm list for controller {controller}")
+        payload = {
+            "id": 0,
+            "method": "E2.GetAlarmList",
+            "params": [controller],
+        }
         return await self._post_jsonrpc(payload)

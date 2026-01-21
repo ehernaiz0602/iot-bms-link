@@ -83,6 +83,7 @@ default_general = {
     "allowable_azure_downtime_minutes": 60,
     "send_message_to_local_file_only": False,
     "e2_tcp_delay_milliseconds": 1,
+    "fail_backoff_seconds": 3600,
 }
 
 default_ip = {
@@ -96,7 +97,7 @@ default_ip = {
             "name": "panel_02",
         },
     ],
-    "emerson_e2": [
+    "emerson_e2_tcp": [
         {
             "ip": "1.1.1.1",
             "name": "panel_01",
@@ -106,7 +107,7 @@ default_ip = {
             "name": "panel_02",
         },
     ],
-    "emerson_e2_http": [
+    "emerson_e2": [
         {
             "ip": "1.1.1.1",
             "name": "panel_01",

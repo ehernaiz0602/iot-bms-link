@@ -135,3 +135,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - E3 now closes sessions between every request
+
+---
+
+## [0.13.0] - 2026-01-21
+
+### Added
+
+- Added emerson E2 alarm parsing
+
+### Changed
+
+- The configuration file emerson_e2 argument now creates HTTP instances instead of TCP instances
+- The configuration file emerson_e2_tcp now creates TCP instances

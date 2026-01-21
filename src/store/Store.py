@@ -69,7 +69,7 @@ class Store:
 
     def add_emerson2(self):
         self.emerson2_panels = []
-        emerson_config = ip_settings.get("emerson_e2", [])
+        emerson_config = ip_settings.get("emerson_e2_tcp", [])
         if len(emerson_config) > 0:
             for panel in emerson_config:
                 panel_ip = panel.get("ip", "")
@@ -79,7 +79,7 @@ class Store:
 
     def add_emerson2http(self):
         self.emerson2http_panels = []
-        emerson_config = ip_settings.get("emerson_e2_http", [])
+        emerson_config = ip_settings.get("emerson_e2", [])
         if len(emerson_config) > 0:
             for panel in emerson_config:
                 panel_ip = panel.get("ip", "")

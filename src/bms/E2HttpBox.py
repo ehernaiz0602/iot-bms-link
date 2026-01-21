@@ -24,6 +24,30 @@ class Point:
 
 
 @dataclass
+class Alarm:
+    acked: bool
+    acktimestamp: str
+    ackuser: str
+    advcode: int
+    advid: int
+    alarm: bool
+    engUnits: str
+    fail: bool
+    limit: str
+    notice: bool
+    priority: int
+    reportvalue: str
+    reset: bool
+    rtn: bool
+    rtntimestamp: str
+    source: str
+    state: str
+    text: str
+    timestamp: str
+    unacked: bool
+
+
+@dataclass
 class Cell:
     celllongname: str
     cellname: str
@@ -42,6 +66,7 @@ class Controller:
     type: str
     subnet: int
     cells: list[Cell] = field(default_factory=list)
+    alarms: list[Alarm] = field(default_factory=list)
 
 
 class E2HttpBox:
@@ -71,6 +96,18 @@ class E2HttpBox:
                 for k, v in cell.points.items():
                     record[k] = asdict(v)
                 data.append(record)
+
+            for alarm in controller.alarms:
+                record = {
+                    "@nodetype": "E2",
+                    "@node": controller.name,
+                    "@mod": controller.revision,
+                    "@point": f"alarm_{alarm.advid}",
+                    "ip": self.ip,
+                }
+                for k, v in asdict(alarm).items():
+                    record[k] = v
+                data.append(record)
         return data
 
     async def get_controllers(self):
@@ -85,11 +122,10 @@ class E2HttpBox:
             ]
 
     async def get_cells(self):
-        logger.info(f"Getting cells")
+        logger.info(f"Getting cells...")
         if len(self.controllers) == 0:
+            logger.info(f"No controllers are known! Auto discovering controllers...")
             await self.get_controllers()
-
-        # cell_fields = {f.name for f in fields(Cell)}
 
         for controller in self.controllers:
             resp = await self.http_interface.get_cell_list(controller.name)
@@ -103,6 +139,7 @@ class E2HttpBox:
 
         logger.info(f"Getting expanded statuses for all cells")
         for controller in self.controllers:
+            controller.alarms = []
             for cell in controller.cells:
                 try:
                     resp = await self.http_interface.get_multi_expanded_status(
@@ -142,3 +179,12 @@ class E2HttpBox:
                         cell.points[property_name] = Point(**point_data)
                 except Exception as e:
                     logger.error(f"{e}")
+
+            logging.info(f"Getting alarms for controller {controller.name}")
+            try:
+                resp = await self.http_interface.get_alarm_list(controller.name)
+                result = resp.get("result", {}).get("data", [])
+                for each in result:
+                    controller.alarms.append(Alarm(**each))
+            except Exception as e:
+                logger.error(f"{e}")
