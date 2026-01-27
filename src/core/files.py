@@ -84,6 +84,7 @@ default_general = {
     "send_message_to_local_file_only": False,
     "e2_tcp_delay_milliseconds": 1,
     "fail_backoff_seconds": 3600,
+    "e2_buffer_length": 75,
 }
 
 default_ip = {

@@ -4,8 +4,8 @@ from store import store
 import os
 from datetime import datetime
 
-__version__: str = "v0.13.0"
-__author__: str = "Henry West <hernaizhenry@gmail.com>"
+__version__: str = "v0.14.0"
+__author__: str = "Henry West <west.henrymiles@gmail.com>"
 
 logger = logging.getLogger(__name__)
 

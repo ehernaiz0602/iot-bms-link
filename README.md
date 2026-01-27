@@ -108,6 +108,8 @@ This file controls logging, retry policies, publishing intervals, and failover b
 - `fail_connection_number` : Number of consecutive BMS failures before triggering hard stop.
 - `allowable_azure_downtime_minutes` : Grace period (minutes) allowed for Azure downtime before hard stop.
 - `send_message_to_local_file_only` : If `true`, bypass IoT Hub and log messages locally (JSONL format) -- you still need a valid IoT connection and configuration.
+- `fail_backoff_seconds` : The number of seconds for the E2 HTTP interface to back off if the server experiences an error.
+- `e2_buffer_length` : The number of points to request at a time through the E2 HTTP interface.
 
 ---
 

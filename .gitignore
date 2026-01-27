@@ -9,6 +9,7 @@ __pycache__/
 venv/
 development_keys/
 .pytest_cache/
+troubleshooting_logs/
 
 # Files #
 #########

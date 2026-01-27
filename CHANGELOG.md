@@ -148,3 +148,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - The configuration file emerson_e2 argument now creates HTTP instances instead of TCP instances
 - The configuration file emerson_e2_tcp now creates TCP instances
+
+---
+
+## [0.14.0] - 2026-01-27
+
+### Added
+
+- Additional descriptions for Settings-General.json in the README.md
+
+### Changed
+
+- E2 HTTP controllers now use a configurable buffered request instead of requesting application-by-application

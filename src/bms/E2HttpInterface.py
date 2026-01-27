@@ -1796,6 +1796,17 @@ class E2HttpInterface:
             return {}
         return await self._post_jsonrpc(payload)
 
+    async def get_multi_expanded_status_buffer(self, request_list: list):
+        logger.debug(
+            f"Fetching exanded status using buffer method of length {len(request_list)}"
+        )
+        payload = {
+            "id": 0,
+            "method": "E2.GetMultiExpandedStatus",
+            "params": [request_list],
+        }
+        return await self._post_jsonrpc(payload)
+
     async def get_alarm_list(self, controller: str):
         logger.debug(f"Fetching alarm list for controller {controller}")
         payload = {

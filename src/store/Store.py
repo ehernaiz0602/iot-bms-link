@@ -221,7 +221,7 @@ class Store:
         panel = self.emerson2http_panels[-1]  # Only one controller is needed
         if not panel.initialized:
             await panel.initialize()
-        await panel.poll_all()
+        await panel.poll_all_buffered()
         data = panel.get_data()
         iot_data = await self.db_interface.fetch_cov_data(data, full_frame=full_frame)
         await self.edge_device.send_message(iot_data)
