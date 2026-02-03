@@ -160,3 +160,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - E2 HTTP controllers now use a configurable buffered request instead of requesting application-by-application
+
+---
+
+## [0.15.0] - 2026-02-03
+
+### Added
+
+- The driver now creates a lock file with an isoformat timestamp when the E2 device experiences a clienterror. It will refuse to run if the file is younger than 12 hours by default
+
+### Changed
+
+- 'fail_backoff_seconds' in settings has been changed to 'lock_reset_seconds'

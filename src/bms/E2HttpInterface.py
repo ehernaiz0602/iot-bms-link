@@ -7,6 +7,8 @@ import platform
 import core
 import pandas as pd
 import re
+import os
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -1674,7 +1676,6 @@ class E2HttpInterface:
         self.retries = general_settings.get("http_retry_count", 3)
         self.failed_requests = 0
         self.http_request_delay = general_settings.get("http_request_delay", 3)
-        self.backoff = general_settings.get("fail_backoff_seconds", 3600)
 
         self.http_headers = {
             "Content-Type": "application/json",
@@ -1746,15 +1747,21 @@ class E2HttpInterface:
 
             except aiohttp.ClientError as e:
                 logger.error("E2 RPC client error on attempt %d: %s", attempt, e)
-                await asyncio.sleep(self.backoff)
-                await asyncio.sleep(self.http_request_delay)
+                await self.close()
+                with open("lock.json", "w+") as f:
+                    lock = {"timestamp": datetime.now().isoformat()}
+                    json.dump(lock, f)
+                    os._exit(1)
 
             except Exception:
                 logger.exception("E2 RPC unexpected error on attempt %d", attempt)
                 await asyncio.sleep(self.http_request_delay)
 
         self.failed_requests += 1
-        await self.close()
+        try:
+            await self.close()
+        except:
+            pass
         return {}
 
     async def get_controller_list(self):
