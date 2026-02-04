@@ -172,3 +172,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - 'fail_backoff_seconds' in settings has been changed to 'lock_reset_seconds'
+
+---
+
+## [0.15.1] - 2026-02-04
+
+### Fixed
+
+- Fixed an issue where the lock file was not being written with a timestamp.
+- Fixed an issue where the lock file was not removed after driver startup if time requirements were met.

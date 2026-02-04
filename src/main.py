@@ -7,7 +7,7 @@ import json
 import core
 import time
 
-__version__: str = "v0.15.0"
+__version__: str = "v0.15.1"
 __author__: str = "Henry West <west.henrymiles@gmail.com>"
 
 logger = logging.getLogger(__name__)
@@ -29,18 +29,26 @@ def main() -> None:
             )
         except Exception as e:
             logger.error(f"Cannot write version file: {e}")
+                
 
     try:
         with open("lock.json", "r") as f:
             contents = json.load(f)
-            timeobj = datetime.fromisoformat(contents["timestamp"])
-            current_time = datetime.now()
-            time_diff = current_time - timeobj
-            seconds_elapsed = time_diff.total_seconds()
-            if seconds_elapsed < general_settings.get("lock_reset_seconds", 43_200):
-                logger.critical(f"lock file exists with a young timestamp. shutting down the driver immediately.")
-                time.sleep(1)
-                os._exit(1)
+        timeobj = datetime.fromisoformat(contents["timestamp"])
+        current_time = datetime.now()
+        time_diff = current_time - timeobj
+        seconds_elapsed = time_diff.total_seconds()
+        if seconds_elapsed < general_settings.get("lock_reset_seconds", 43_200):
+            logger.critical(f"lock file exists with a young timestamp. shutting down the driver immediately.")
+            time.sleep(1)
+            os._exit(1)
+        else:
+            try:
+                os.remove("lock.json")
+                logger.info("removed lock file.")
+            except:
+                logger.warning(f"could not remove lock file even though it exists. at the minimum it meets the time requirements. continuing.")
+
     except FileNotFoundError:
         logger.warning(f"lock file does not exist. it is probably okay to continue...")
     except Exception as e:

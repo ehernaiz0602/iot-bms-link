@@ -1,3 +1,4 @@
+import time
 import json
 import logging
 import asyncio
@@ -1751,7 +1752,8 @@ class E2HttpInterface:
                 with open("lock.json", "w+") as f:
                     lock = {"timestamp": datetime.now().isoformat()}
                     json.dump(lock, f)
-                    os._exit(1)
+                time.sleep(1)
+                os._exit(1)
 
             except Exception:
                 logger.exception("E2 RPC unexpected error on attempt %d", attempt)
